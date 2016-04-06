@@ -1,0 +1,23 @@
+#!/bin/sh
+
+
+BR="$1"
+if [ -z $BR ] ; then
+    BR="br0"
+fi
+BRCTL="sudo brctl"
+IFCONFIG="sudo ifconfig"
+
+if $BRCTL show | grep -q $BR ; then
+    $IFCONFIG $BR down
+    $BRCTL delbr $BR
+fi
+
+$IFCONFIG eth0 down
+$IFCONFIG eth1 down
+$IFCONFIG eth0 0.0.0.0
+$IFCONFIG eth1 0.0.0.0
+$BRCTL addbr $BR
+$BRCTL addif $BR eth0
+$BRCTL addif $BR eth1
+sudo dhclient $BR

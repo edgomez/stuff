@@ -1,0 +1,38 @@
+[ui]
+verbose = false
+username = Edouard Gomez <ed.gomez@free.fr>
+editor = emacs
+# merge = emacs-merge
+
+[extensions]
+mq=
+hgk=
+gpg=
+patchbomb=
+convert=
+churn=
+bookmarks=
+graphlog=
+progress=
+record=
+
+[web]
+#style = gitweb
+
+[email]
+from = Edouard Gomez <ed.gomez@free.fr>
+
+[smtp]
+host = smtp.free.fr
+
+[diff]
+git = 1
+
+[mq]
+plain = False
+
+[defaults]
+
+[convert]
+hg.usebranchnames = True
+hg.tagsbranch = tags-update

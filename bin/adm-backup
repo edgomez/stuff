@@ -1,0 +1,88 @@
+#/bin/sh
+
+_donothing=1
+_destination=""
+_bck_photos=1
+_bck_ed=1
+_bck_packages=1
+
+print_help()
+{
+cat <<EOF
+backup-to-ext -d <DIR> [OPTIONS]
+
+Mandatory arguments:
+ -d             <DIR> Backup destination directory
+
+Optional arguments:
+ --really             Really backup the stuff
+ --no-photos          Don't backup /home/photos
+ --no-ed              Don't backup ed's home
+ --no-packages        Dont't backup the debian local packages cache
+EOF
+}
+
+parse_args()
+{
+	while [ $# -gt 0 ] ; do
+		case $1 in
+		--help|-h)
+			print_help
+			exit 0
+		;;
+		--really)
+			_donothing=0
+		;;
+		-d|--destination)
+			_destination="$2"
+			shift
+		;;
+		--no-photos)
+			_bck_photos=0
+		;;
+		--no-ed)
+			_bck_ed=0
+		;;
+		--no-packages)
+			_bck_packages=0
+		;;
+		*)
+			printf "ignored argument '%s'\n" "$1"
+			exit 1
+		;;
+		esac
+		shift
+	done
+}
+
+parse_args "$@"
+
+_rsyncflags=""
+if [ $_donothing -ne 0 ] ; then
+	_rsyncflags="-n"
+fi
+
+if [ "$(printf '%s' "$_destination" |tail -c 1)" = "/" ] ; then
+	_destination="${_destination%\/}"
+fi
+
+if [ ! -d "$_destination" ] ; then
+	echo "error: '$_destination' does not exist"
+	echo "info : provide a destination argument"
+	exit 1
+fi
+
+directories=""
+if [ $_bck_photos -ne 0 ] ; then
+	directories="$directories /home/photos"
+fi
+if [ $_bck_ed -ne 0 ] ; then
+	directories="$directories /home/ed"
+fi
+if [ $_bck_packages -ne 0 ] ; then
+	directories="$directories /var/cache/apt/archives"
+fi
+
+for folder in $directories ; do
+	rsync -av --delete --exclude ".cache" --exclude ".thumbnails" --exclude "dls/tmp" $_rsyncflags "${folder}/" "${_destination}${folder}/"
+done
