@@ -49,8 +49,8 @@
 " This function is used for C/Java/C++ editing.
 :function MyCStyle()
 	:set noexpandtab
-	:set tabstop=8
-	:set shiftwidth=8 
+	:set tabstop=4
+	:set shiftwidth=4 
 	:set cindent
 	:set cinkeys=0{,0},:,0#,!<Tab>,!^F,!o,!O
    	:set formatoptions=tcqor
