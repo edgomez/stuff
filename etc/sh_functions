@@ -28,7 +28,7 @@ add_tail()
 # @1 Variable name
 # @2 new element
 # @3 separator
-aadd_head()
+add_head()
 {
     local old="$(printf "%s" "$(varpt "$1")")"
     local new="$(printf "%s" "$old" | sed -e "s,$2[$3]*,," -e "s,^$3,," -e "s,$3\$,,")"
