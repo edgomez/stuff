@@ -1,3 +1,4 @@
+#!/bin/sh
 # collection of functions that i sue daily on my desktop
 # i usally echo ". opt/perso/bin/sh_functions" >> ~/.bashrc
 # on my machines
