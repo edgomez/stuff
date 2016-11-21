@@ -180,7 +180,7 @@
 ;; Remove my email address function (useful when posting tla changelogs)
 (defun wipe-my-email ()
   (interactive)
-  (replace-string "Edouard Gomez <ed.gomez@free.fr>" "                                " )
+  (replace-match "Edouard Gomez <ed.gomez@free.fr>" "                                " )
 )
 
 ; Make sure remote connections have backspace well defined
