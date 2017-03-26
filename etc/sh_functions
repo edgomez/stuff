@@ -253,6 +253,7 @@ dt_pull()
     git checkout master
     git reset --hard
     git pull
+    git submodule update --init
     if [ -f tobemerged ] ; then
         git merge --no-commit $(cat tobemerged)
     fi
