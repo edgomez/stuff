@@ -58,6 +58,7 @@
 ;; Bind icorrect C mode depending on the file location
 (setq auto-mode-alist (cons '("/.*/rawstudio.*/.*\\.[ch]$" . rawstudio-c-mode) auto-mode-alist))
 (setq auto-mode-alist (cons '("/.*/linux/.*\\.[ch]$" . linux-c-mode) auto-mode-alist))
+(setq auto-mode-alist (cons '("/.*/r16dev\-lichee\-kernel/.*\\.[ch]$" . linux-c-mode) auto-mode-alist))
 
 ;; At least load the base c-mode customization with any c file
 (add-hook 'c-mode-common-hook 'my-c-mode)
@@ -103,7 +104,7 @@
 	(cursor-color . "#ff0000")
 	(cursor-type . box)
 ;;	(font . "-misc-fixed-medium-r-normal-*-14-*-*-*-c-*-*")
-	(font . "Monospace 9")
+	(font . "Monospace 10")
 	)
       )
 (if window-system 
