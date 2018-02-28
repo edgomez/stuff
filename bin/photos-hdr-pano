@@ -24,20 +24,19 @@ def logdebug(msg):
 
 def option_parser():
     parser = argparse.ArgumentParser(description="Prepare a panoramic set of photos")
-    parser.add_argument('-k', '--keep', dest='keep',
-                      action='store_true', help='Keep intermediary files', default=False)
     parser.add_argument('-s', '--stack', dest='stack',
-                      type='int', help='Bracketed stack depth', default=3)
+                      type=int, help='Bracketed stack depth', default=3)
     parser.add_argument('-a', '--align', dest='align',
                       action='store_true', help='Align the HDR stacks', default=True)
     parser.add_argument('-v', '--verbose', dest='verbose',
                       action='store_true', help='Be verbose', default=False)
     parser.add_argument('-j', '--parallel', dest='j',
-                      type='int', help='Parallel number of stacks to process in parallel', default=0)
+                      type=int, help='Parallel number of stacks to process in parallel', default=0)
     parser.add_argument('-m', '--hdrmerge', dest='merge',
                       action='store_true', help='Merge the HDR stacks with hugin_hdrmerge', default=False)
     parser.add_argument('-e', '--enfuse', dest='enfuse',
-                      action='store_true', help='Merge the HDR stacks with hugin_hdrmerge', default=False)
+                      action='store_true', help='Merge the HDR stacks with enfuse', default=False)
+    parser.add_argument('files', nargs='+', help='picture')
     return parser
 
 def copy_exif(dst, src):
@@ -85,15 +84,13 @@ def copy_exif(dst, src):
             sys.exit(1)
 
 class stack(object):
-    def __init__(self, identifier, stack_size, num_stacks, shots, keep=False):
+    def __init__(self, identifier, stack_size, num_stacks, shots):
         self.id = identifier
         self.stack_size = stack_size
         self.num_stacks = num_stacks
         self.shots = shots
         self.aligned = None
         self.hdr = None
-        self.cleanup = False
-        self.keep = keep
         self.process = None
 
     def __del__(self):
@@ -116,13 +113,11 @@ class stack(object):
             logerr('here is the output\n%s' % '\n'.join(stdout, stderr))
             sys.exit(1)
 
-        self.cleanup = True
         self.aligned = ['%s%04d.tif' % (align_pfx, i)  for i in xrange(self.stack_size)]
         for i in xrange(self.stack_size):
             copy_exif(self.aligned[i], self.shots[i])
 
     def prealigned(self):
-        self.cleanup = False
         self.aligned = self.shots
 
     def hugin_hdrmerge(self):
@@ -179,13 +174,13 @@ def process_stack(options, s):
     
 def main():
     parser = option_parser()
-    (options, args) = parser.parse_args()
+    options = parser.parse_args()
 
     if options.verbose:
         global _verbosity
         _verbosity += 1
 
-    files = sorted(args)
+    files = sorted(options.files)
     if len(files) % options.stack:
         logerr("error: file list length is not a multiple of the stack depth")
         sys.exit(1)
@@ -201,7 +196,7 @@ def main():
     pool = multiprocessing.Pool(processes)
     try:
         for n in xrange(numstack):
-            s = stack(n+1, options.stack, numstack, files[options.stack*n:options.stack*(n+1)], options.keep)
+            s = stack(n+1, options.stack, numstack, files[options.stack*n:options.stack*(n+1)])
             r = pool.apply_async(process_stack, (options, s))
             stacks.append(r)
 
