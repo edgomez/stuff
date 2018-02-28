@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- Encoding: utf-8 -*-
 
-import optparse
+import argparse
 import sys
 import os
 import subprocess
@@ -23,20 +23,20 @@ def logdebug(msg):
         sys.stdout.write("debug: %s" % (msg))
 
 def option_parser():
-    parser = optparse.OptionParser()
-    parser.add_option('-k', '--keep', dest='keep',
+    parser = argparse.ArgumentParser(description="Prepare a panoramic set of photos")
+    parser.add_argument('-k', '--keep', dest='keep',
                       action='store_true', help='Keep intermediary files', default=False)
-    parser.add_option('-s', '--stack', dest='stack',
+    parser.add_argument('-s', '--stack', dest='stack',
                       type='int', help='Bracketed stack depth', default=3)
-    parser.add_option('-a', '--align', dest='align',
+    parser.add_argument('-a', '--align', dest='align',
                       action='store_true', help='Align the HDR stacks', default=True)
-    parser.add_option('-v', '--verbose', dest='verbose',
+    parser.add_argument('-v', '--verbose', dest='verbose',
                       action='store_true', help='Be verbose', default=False)
-    parser.add_option('-j', '--parallel', dest='j',
+    parser.add_argument('-j', '--parallel', dest='j',
                       type='int', help='Parallel number of stacks to process in parallel', default=0)
-    parser.add_option('-m', '--hdrmerge', dest='merge',
+    parser.add_argument('-m', '--hdrmerge', dest='merge',
                       action='store_true', help='Merge the HDR stacks with hugin_hdrmerge', default=False)
-    parser.add_option('-e', '--enfuse', dest='enfuse',
+    parser.add_argument('-e', '--enfuse', dest='enfuse',
                       action='store_true', help='Merge the HDR stacks with hugin_hdrmerge', default=False)
     return parser
 
