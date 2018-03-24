@@ -1,0 +1,213 @@
+#!/usr/bin/env python
+# -*- Encoding: utf-8 -*-
+
+import argparse
+import sys
+import os
+import subprocess
+import multiprocessing
+import signal
+
+_verbosity = 1
+
+def logerr(msg):
+    if _verbosity >= 0:
+        sys.stderr.write("error: %s" % (msg))
+
+def loginfo(msg):
+    if _verbosity >= 1:
+        sys.stdout.write("info: %s" % (msg))
+
+def logdebug(msg):
+    if _verbosity >= 2:
+        sys.stdout.write("debug: %s" % (msg))
+
+def option_parser():
+    parser = argparse.ArgumentParser(description="Prepare a panoramic set of photos")
+    parser.add_argument('-s', '--stack', dest='stack',
+                      type=int, help='Bracketed stack depth', default=3)
+    parser.add_argument('-a', '--align', dest='align',
+                      action='store_true', help='Align the HDR stacks', default=True)
+    parser.add_argument('-v', '--verbose', dest='verbose',
+                      action='store_true', help='Be verbose', default=False)
+    parser.add_argument('-j', '--parallel', dest='j',
+                      type=int, help='Parallel number of stacks to process in parallel', default=0)
+    parser.add_argument('-m', '--hdrmerge', dest='merge',
+                      action='store_true', help='Merge the HDR stacks with hugin_hdrmerge', default=False)
+    parser.add_argument('-e', '--enfuse', dest='enfuse',
+                      action='store_true', help='Merge the HDR stacks with enfuse', default=False)
+    parser.add_argument('files', nargs='+', help='picture')
+    return parser
+
+def copy_exif(dst, src):
+    exif_tags = ['-Make', '-Model',
+                 '-Aperture', '-FNumber',
+                 '-FocalLength', '-FocalLengthIn35mmFormat',
+                 '-ShutterSpeed', '-ExposureTime',
+                 '-Iso',
+                 '-Lens', '-LensType', '-LensSpec',
+                 '-CreateDate', '-DateTimeOriginal',
+                 '-b', '-icc_profile']
+    
+    cmd = [ 'exiftool', '-j']
+    cmd.extend(exif_tags)
+    cmd.append(src)
+    logdebug("%s\n" % (' '.join(cmd)))
+    exiftool = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    (stdout, stderr) = exiftool.communicate()
+    if exiftool.returncode:
+        logerr('exiftool returned %d value' % exiftool.returncode)
+        logerr('here is the output\n%s' % '\n'.join(stdout, stderr))
+        sys.exit(1)
+
+    exifdata = '\n'.join([l for l in stdout.split('\n') if l.find("SourceFile") == -1])
+    exiffn = "%s.exif" % dst
+    with open(exiffn, 'w+b') as f:
+        f.write(exifdata)
+        f.flush()
+        cmd = [ 'exiftool', '-overwrite_original', '-all=', dst]
+        logdebug("%s\n" % (' '.join(cmd)))
+        exiftool = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (stdout, stderr) = exiftool.communicate()
+        if exiftool.returncode:
+            logerr('exiftool returned %d value' % exiftool.returncode)
+            logerr('here is the output\n%s' % '\n'.join(stdout, stderr))
+            sys.exit(1)
+
+        cmd = [ 'exiftool', '-overwrite_original', '-j=%s' % exiffn, dst]
+        logdebug("%s\n" % (' '.join(cmd)))
+        exiftool = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (stdout, stderr) = exiftool.communicate()
+        if exiftool.returncode:
+            logerr('exiftool returned %d value' % exiftool.returncode)
+            logerr('here is the output\n%s' % '\n'.join(stdout, stderr))
+            sys.exit(1)
+
+class stack(object):
+    def __init__(self, identifier, stack_size, num_stacks, shots):
+        self.id = identifier
+        self.stack_size = stack_size
+        self.num_stacks = num_stacks
+        self.shots = shots
+        self.aligned = None
+        self.hdr = None
+        self.process = None
+
+    def __del__(self):
+        if self.process and self.process.returncode:
+            self.process.kill()
+
+    def align(self):
+        align_pfx = 'aligned_%04d_' % self.id
+        cmd = [ 'align_image_stack', '-a', align_pfx, '-g', '10', '-c', '16', '-l', '-C' ]
+        cmd.extend(self.shots)
+
+        loginfo("aligning stack %d/%d\n" % (self.id, self.num_stacks))
+        logdebug("%s\n" % (' '.join(cmd)))
+        self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        align_image_stack = self.process
+        (stdout, stderr) = align_image_stack.communicate()
+        self.process = None
+        if align_image_stack.returncode:
+            logerr('align_image_stack returned %d value' % align_image_stack.returncode)
+            logerr('here is the output\n%s' % '\n'.join(stdout, stderr))
+            sys.exit(1)
+
+        self.aligned = ['%s%04d.tif' % (align_pfx, i)  for i in xrange(self.stack_size)]
+        for i in xrange(self.stack_size):
+            copy_exif(self.aligned[i], self.shots[i])
+
+    def prealigned(self):
+        self.aligned = self.shots
+
+    def hugin_hdrmerge(self):
+        hdr_pattern = 'hdr_%04d.tif'
+        self.hdr = hdr_pattern % self.id
+        cmd = [ 'hugin_hdrmerge', '-m', 'khan', '-i' , '6', '-s', '30', '-o', self.hdr]
+        #cmd = [ 'hugin_hdrmerge', '-m', 'avg_slow', '-o', self.hdr]
+        cmd.extend(self.aligned)
+
+        loginfo("hugin_hdrmerge merging stack %d/%d\n" % (self.id, self.num_stacks))
+        logdebug("%s\n" % (' '.join(cmd)))
+        self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        hugin_hdrmerge = self.process
+        (stdout, stderr) = hugin_hdrmerge.communicate()
+        self.process = None
+        if hugin_hdrmerge.returncode:
+            logerr('hugin_hdrmerge returned %d value' % hugin_hdrmerge.returncode)
+            logerr('here is the output\n%s' % '\n'.join(stdout, stderr))
+            sys.exit(1)
+        copy_exif(self.hdr, self.shots[1])
+
+    def enfuse(self):
+        enfuse_pattern = 'enfuse_%04d.tif'
+        self.hdr = enfuse_pattern % self.id
+        cmd = [ 'enfuse', '-d', 'r32', '-o', self.hdr]
+        cmd.extend(self.aligned)
+
+        loginfo("enfuse merging stack %d/%d\n" % (self.id, self.num_stacks))
+        logdebug("%s\n" % (' '.join(cmd)))
+        self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        enfuse = self.process
+        (stdout, stderr) = enfuse.communicate()
+        self.process = None
+        if enfuse.returncode:
+            logerr('enfuse returned %d value' % enfuse.returncode)
+            logerr('here is the output\n%s' % '\n'.join(stdout, stderr))
+            sys.exit(1)
+        copy_exif(self.hdr, self.shots[1])
+
+def process_stack(options, s):
+    try:
+        if options.align:
+            s.align()
+        else:
+            s.prealigned()
+        if options.merge:
+            s.hugin_hdrmerge()
+        elif options.enfuse:
+            s.enfuse()
+        return s
+    except KeyboardInterrupt:
+        loginfo("worker quitting by ctrl-c\n")
+        return s
+    
+def main():
+    parser = option_parser()
+    options = parser.parse_args()
+
+    if options.verbose:
+        global _verbosity
+        _verbosity += 1
+
+    files = sorted(options.files)
+    if len(files) % options.stack:
+        logerr("error: file list length is not a multiple of the stack depth")
+        sys.exit(1)
+
+    numstack = len(files)/options.stack
+    stacks = []
+    processes = None
+    if options.j > 0:
+        processes = options.j
+    if processes > numstack:
+        processes = numstack
+
+    pool = multiprocessing.Pool(processes)
+    try:
+        for n in xrange(numstack):
+            s = stack(n+1, options.stack, numstack, files[options.stack*n:options.stack*(n+1)])
+            r = pool.apply_async(process_stack, (options, s))
+            stacks.append(r)
+
+        pool.close()
+        pool.join()
+
+    except KeyboardInterrupt:
+        loginfo("quitting by crtl-c ...")
+        if pool is not None:
+            pool.terminate()
+            pool.join()
+
+if __name__ == "__main__":
+    main()
