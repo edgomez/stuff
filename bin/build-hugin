@@ -1,0 +1,193 @@
+#!/bin/sh
+
+LENSFUNREV="origin/master"
+LENSFUNURL="https://git.code.sf.net/p/lensfun/code"
+
+HUGINREV="default"
+HUGINURL="http://hg.code.sf.net/p/hugin/hugin"
+
+PANOREV="default"
+PANOURL="http://hg.code.sf.net/p/panotools/libpano13"
+
+ENBLENDREV="default"
+ENBLENDURL="http://hg.code.sf.net/p/enblend/code"
+
+VIGRAURL="origin/master"
+VIGRAURL="https://github.com/ukoethe/vigra.git"
+
+COMPONENTS_ALL="libpano vigra enblend hugin"
+
+BUILDDIR="build-$(uname -m)"
+
+opt_prefix="$HOME/opt/hugin"
+opt_parallel="-j 4"
+opt_build_type="Release"
+opt_components=""
+
+compile_lensfun()
+{
+    if [ ! -d lensfun ] ; then
+        git clone --no-checkout "$LENSFUNURL" lensfun
+    else
+        git -C lensfun remote rm origin
+        git -C lensfun remote add origin "$LENSFUNURL"
+        git -C lensfun fetch
+        git -C lensfun checkout -B build "$LENSFUNREV"
+    fi
+    cd lensfun
+    rm -rf "$BUILDDIR"
+    mkdir "$BUILDDIR"
+    cd "$BUILDDIR"
+    cmake \
+        -DCMAKE_INSTALL_PREFIX=$opt_prefix \
+	-DCMAKE_BUILD_TYPE=$opt_build_type  \
+	-DBUILD_FOR_SSE=YES \
+        -DBUILD_FOR_SSE2=YES \
+        ..
+    cd ..
+    cmake --build "$BUILDDIR" --target install -- $opt_parallel
+    cd ..
+}
+
+compile_libpano()
+{
+    if [ ! -d libpano ] ; then
+        hg clone "$PANOURL" libpano
+    else
+        hg -R libpano pull "$PANOURL"
+        hg -R libpano up -C "$PANOREV"
+    fi
+    cd libpano
+    rm -rf "$BUILDDIR"
+    mkdir "$BUILDDIR"
+    cd "$BUILDDIR"
+    cmake \
+        -DCMAKE_INSTALL_PREFIX=$opt_prefix \
+	-DCMAKE_BUILD_TYPE=$opt_build_type  \
+        ..
+    cd ..
+    cmake --build "$BUILDDIR" --target install -- $opt_parallel
+    cd ..
+}
+
+compile_vigra()
+{
+    if [ ! -d vigra ] ; then
+        git clone --no-checkout "$VIGRAURL" vigra         
+    else
+        git -C vigra remote rm origin
+        git -C vigra remote add origin "$VIGRAURL"
+        git -C vigra fetch
+        git -C vigra checkout -B build "$VIGRAREV"
+    fi
+    cd vigra
+    rm -rf "$BUILDDIR"
+    mkdir "$BUILDDIR"
+    cd "$BUILDDIR"
+    cmake \
+        -DCMAKE_INSTALL_PREFIX=$opt_prefix \
+	-DCMAKE_BUILD_TYPE=$opt_build_type  \
+        -DWITH_VIGRANUMPY=0 \
+	-DWITH_OPENEXR=1 \
+        ..
+    cd ..
+    cmake --build build-x86_64 --target install -- $opt_parallel
+    cd ..
+}
+
+compile_enblend()
+{
+    if [ ! -d enblend ] ; then
+        hg clone "$ENBLENDURL" enblend
+    else
+        #hg -R enblend pull "$ENBLENDURL"
+        #hg -R enblend up -C $ENBLENDREV
+	echo yo
+    fi
+    cd enblend
+    rm -rf "$BUILDDIR"
+    mkdir "$BUILDDIR"
+    cd "$BUILDDIR"
+    cmake \
+        -DCMAKE_INSTALL_PREFIX=$opt_prefix \
+	-DCMAKE_BUILD_TYPE=$opt_build_type  \
+        -DENABLE_OPENMP=TRUE \
+	-DENABLE_OPENCL=NO \
+	-DDEFAULT_OPENCL_PATH="$opt_prefix/share/kernels" \
+        ..
+    cd ..
+    mkdir -p "$BUILDDIR/src/"
+    touch "$BUILDDIR/src/enblend.1"
+    touch "$BUILDDIR/src/enfuse.1"
+    cmake --build "$BUILDDIR" --target install -- $opt_parallel
+    cd ..
+}
+
+compile_hugin()
+{
+    if [ ! -d hugin ] ; then
+        hg clone "$HUGINURL" hugin
+    else
+        hg -R hugin pull "$HUGINURL"
+        hg -R hugin up -C $HUGINREV
+    fi
+    cd hugin
+    rm -rf "$BUILDDIR"
+    mkdir "$BUILDDIR"
+    cd "$BUILDDIR"
+    cmake \
+        -DCMAKE_INSTALL_PREFIX=$opt_prefix \
+	-DCMAKE_BUILD_TYPE=$opt_build_type  \
+        ..
+    cd ..
+    cmake --build "$BUILDDIR" -- $opt_parallel
+    sudo cmake --build "$BUILDDIR" --target install
+    sudo chown -R $(id -u):$(id -g) "$opt_prefix" "$BUILDDIR"
+    strip "$opt_prefix/bin/* $opt_prefix/lib/"*.so* "$opt_prefix/lib/hugin/"*.so*
+    cd ..
+}
+
+compile_component()
+{
+    eval "compile_$component"
+}
+
+is_function()
+{
+    case "$(type "$1" | head -n 1)" in
+    $1*function) return 0;;
+    *) return 1;;
+    esac
+}
+
+parse_args()
+{
+    while [ $# -gt 0 ] ; do
+    case "$1" in
+    --prefix) opt_prefix="$2"; shift; ;;
+    --build-type) opt_build_type="$2"; shift; ;;
+    -j) opt_parallel="-j $2"; shift; ;;
+    *)
+        if is_function "compile_$1"; then
+            opt_components="$opt_components $1"
+        fi
+        ;;
+    esac
+    shift
+    done
+
+    if [ -z "$opt_components" ] ; then
+        opt_components="$COMPONENTS_ALL"
+    fi
+}
+
+main()
+{
+    parse_args "$@"
+
+    for component in $opt_components ; do 
+        compile_component $component
+    done
+}
+
+main "$@"
