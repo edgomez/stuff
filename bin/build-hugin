@@ -18,11 +18,15 @@ VIGRAURL="https://github.com/ukoethe/vigra.git"
 COMPONENTS_ALL="libpano vigra enblend hugin"
 
 BUILDDIR="build-$(uname -m)"
+bh_CFLAGS=""
+bh_CXXFLAGS=""
+bh_LDFLAGS=""
 
 opt_prefix="$HOME/opt/hugin"
 opt_parallel="-j 4"
 opt_build_type="Release"
 opt_components=""
+opt_asan=0
 
 compile_lensfun()
 {
@@ -38,7 +42,7 @@ compile_lensfun()
     rm -rf "$BUILDDIR"
     mkdir "$BUILDDIR"
     cd "$BUILDDIR"
-    cmake \
+    CFLAGS="$bh_CFLAGS" CXXFLAGS="$bh_CXX_FLAGS" LDFLAGS="$bh_LDFLAGS" cmake \
         -DCMAKE_INSTALL_PREFIX=$opt_prefix \
 	-DCMAKE_BUILD_TYPE=$opt_build_type  \
 	-DBUILD_FOR_SSE=YES \
@@ -61,7 +65,7 @@ compile_libpano()
     rm -rf "$BUILDDIR"
     mkdir "$BUILDDIR"
     cd "$BUILDDIR"
-    cmake \
+    CFLAGS="$bh_CFLAGS" CXXFLAGS="$bh_CXX_FLAGS" LDFLAGS="$bh_LDFLAGS" cmake \
         -DCMAKE_INSTALL_PREFIX=$opt_prefix \
 	-DCMAKE_BUILD_TYPE=$opt_build_type  \
         ..
@@ -84,7 +88,7 @@ compile_vigra()
     rm -rf "$BUILDDIR"
     mkdir "$BUILDDIR"
     cd "$BUILDDIR"
-    cmake \
+    CFLAGS="$bh_CFLAGS" CXXFLAGS="$bh_CXX_FLAGS" LDFLAGS="$bh_LDFLAGS" cmake \
         -DCMAKE_INSTALL_PREFIX=$opt_prefix \
 	-DCMAKE_BUILD_TYPE=$opt_build_type  \
         -DWITH_VIGRANUMPY=0 \
@@ -108,7 +112,7 @@ compile_enblend()
     rm -rf "$BUILDDIR"
     mkdir "$BUILDDIR"
     cd "$BUILDDIR"
-    cmake \
+    CFLAGS="$bh_CFLAGS" CXXFLAGS="$bh_CXX_FLAGS" LDFLAGS="$bh_LDFLAGS" cmake \
         -DCMAKE_INSTALL_PREFIX=$opt_prefix \
 	-DCMAKE_BUILD_TYPE=$opt_build_type  \
         -DENABLE_OPENMP=TRUE \
@@ -135,7 +139,7 @@ compile_hugin()
     rm -rf "$BUILDDIR"
     mkdir "$BUILDDIR"
     cd "$BUILDDIR"
-    cmake \
+    CFLAGS="$bh_CFLAGS" CXXFLAGS="$bh_CXX_FLAGS" LDFLAGS="$bh_LDFLAGS" cmake \
         -DCMAKE_INSTALL_PREFIX=$opt_prefix \
 	-DCMAKE_BUILD_TYPE=$opt_build_type  \
         ..
@@ -166,6 +170,7 @@ parse_args()
     case "$1" in
     --prefix) opt_prefix="$2"; shift; ;;
     --build-type) opt_build_type="$2"; shift; ;;
+    --asan) opt_asan=1; ;;
     -j) opt_parallel="-j $2"; shift; ;;
     *)
         if is_function "compile_$1"; then
@@ -178,6 +183,13 @@ parse_args()
 
     if [ -z "$opt_components" ] ; then
         opt_components="$COMPONENTS_ALL"
+    fi
+
+    if [ $opt_asan -ne 0 ] ; then
+        ASANFLAGS="-fsanitize=address -fno-omit-frame-pointer"
+        bh_CFLAGS="$CFLAGS $ASANFLAGS"
+        bh_CXXFLAGS="$CFLAGS $ASANFLAGS"
+        bh_LDLAGS="$LDFLAGS -lasan"
     fi
 }
 
