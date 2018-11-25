@@ -5,23 +5,19 @@ from optparse import OptionParser
 
 parser = OptionParser()
 parser.add_option("", "--ratemain", dest="ratemain",
-                  help="main loan rate", metavar="FLOAT")
+                  help="main loan rate", metavar="FLOAT", default="2")
 parser.add_option("", "--summain", dest="summain",
-                  help="main sum borrowed", metavar="FLOAT")
+                  help="main sum borrowed", metavar="FLOAT", default="160000")
 parser.add_option("", "--monthlyfeemain", dest="monthlyfeemain", type="float",
-                  help="monthly due fee for main loan", metavar="FLOAT")
+                  help="monthly due fee for main loan", metavar="FLOAT", default="1000")
 parser.add_option("", "--sumzero", dest="sumzero",
-                  help="sum borrowed at zero per cent", metavar="FLOAT")
+                  help="sum borrowed at zero per cent", metavar="FLOAT", default="0")
 parser.add_option("", "--monthlyfeezero", dest="monthlyfeezero",
-                  help="monthly due fee for main loan", metavar="FLOAT")
+                  help="monthly due fee for zero loan", metavar="FLOAT", default="0")
 parser.add_option("-v", "--verbose", dest="verbose", action="store_true",
-                  help="monthly due fee for main loan", metavar="FLOAT")
-parser.add_option("", "--initialsummain", dest="initialsummain",
-                  help="initial main loan sum", metavar="FLOAT")
+                  help="print the monhtly report", metavar="FLOAT")
 parser.add_option("", "--assuranceratemain", dest="assuranceratemain",
                   help="rate of the main loan assurance", metavar="FLOAT")
-
-
 
 (options, args) = parser.parse_args()
 
@@ -30,33 +26,38 @@ options.summain = float(options.summain)
 options.monthlyfeemain = float(options.monthlyfeemain)
 options.sumzero = float(options.sumzero)
 options.monthlyfeezero = float(options.monthlyfeezero)
-options.initialsummain = float(options.initialsummain)
+options.initialsummain = options.summain
 options.assuranceratemain = float(options.assuranceratemain)
 
 monthlyfee = options.monthlyfeezero + options.monthlyfeemain
 
 cost = float(0)
 month = 1
+if options.verbose:
+    sys.stdout.write(
+"""Month | Payed Main | Left Main | Payed Zero | Left Zero | Total cost
+------+------------+-----------+------------+-----------+-----------
+""")
+
 while options.summain>0 or options.sumzero>0:
-    if options.sumzero>0:
+    if options.sumzero > 0:
         options.sumzero = options.sumzero - options.monthlyfeezero
-    if options.sumzero<=0:
+    if options.sumzero <= 0:
         options.sumzero = 0
         options.monthlyfeezero = 0.0
     monthlymainpayed = 0 
-    if options.summain>0:
+    if options.summain > 0:
         monthmaincost = options.summain*options.ratemain/1200.0
         monthmainassurancecost = options.initialsummain*options.assuranceratemain/1200.0
         cost = cost + monthmaincost + monthmainassurancecost
         monthlymainpayed = (monthlyfee - options.monthlyfeezero - monthmaincost)
         options.summain = options.summain - monthlymainpayed
-    if options.summain<=0:
+    if options.summain <= 0:
         options.summain = 0
     if options.verbose:
-        sys.stdout.write("% 3d % 4.2f % 6.2f % 4.2f % 6.2f % 6.2f\n" %
+        sys.stdout.write("% 6d | %9.2f | %9.2f | %10.2f | %9.2f | %6.2f\n" %
                          (month, monthlymainpayed, options.summain, options.monthlyfeezero, options.sumzero,  cost))
- 
     month = month + 1
 
-sys.stdout.write("cost: %.2f\nmonths: %d\n" % (cost, month))
+sys.stdout.write("cost: %.2f (%2.2f%% of the borrowed money)\nmonths: %d (%2.2f years)\n" % (cost, cost/options.initialsummain*100.0, month, float(month)/12.0))
 

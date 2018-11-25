@@ -51,6 +51,7 @@ env_personal()
     VIDEO_HOME="${HOME}/opt/video"
     PERSO_HOME="${HOME}/opt/perso"
     DT_HOME="${HOME}/opt/darktable"
+    PHOTO_HOME="${HOME}/opt/photolibs"
 
     #------------------------------------------------------------
     #    PATH
@@ -77,6 +78,8 @@ env_personal()
     add_head "LIBRARY_PATH" "${PANO_HOME}/lib" ":"
     add_head "LD_LIBRARY_PATH" "${VIDEO_HOME}/lib" ":"
     add_head "LIBRARY_PATH" "${VIDEO_HOME}/lib" ":"
+    add_head "LD_LIBRARY_PATH" "${PHOTO_HOME}/lib" ":"
+    add_head "LIBRARY_PATH" "${PHOTO_HOME}/lib" ":"
 
     #------------------------------------------------------------
     # Include dirs for C language 
@@ -84,6 +87,7 @@ env_personal()
 
     add_head "CPATH" "${PANO_HOME}/include" ":"
     add_head "CPATH" "${VIDEO_HOME}/include" ":"
+    add_head "CPATH" "${PHOTO_HOME}/include" ":"
 
     #------------------------------------------------------------
     # Python path
@@ -97,6 +101,7 @@ env_personal()
 
     add_tail "PKG_CONFIG_PATH" "${PANO_HOME}/lib/pkgconfig" ":"
     add_tail "PKG_CONFIG_PATH" "${VIDEO_HOME}/lib/pkgconfig" ":"
+    add_tail "PKG_CONFIG_PATH" "${PHOTO_HOME}/lib/pkgconfig" ":"
 
     #------------------------------------------------------------
     # Shell prompt
@@ -227,6 +232,7 @@ dt_compile()
       && sed \
         -e s,'^Exec=.*',"Exec=$DT_HOME/bin/darktable %U", \
         -e s,'TryExec=.*',"TryExec=$DT_HOME/bin/darktable", \
+        -e s,'Icon=.*',"Icon=$DT_HOME/share/icons/hicolor/scalable/apps/darktable.svg", \
         "$DT_HOME/share/applications/darktable.desktop" \
         > "$HOME/.local/share/applications/darktable.desktop" \
       || mv -f "$DT_HOME.old" "$DT_HOME" 2>/dev/null
@@ -271,9 +277,11 @@ dt_rebase()
     git checkout master
     git reset --hard
     for b in $(cat tobemerged) ; do
-        git checkout -B $(basename $b) $b
+        local branch="${b#*/}"
+        local remote="${b%/${branch}}"
+        git checkout -B $branch $b
         git rebase origin/master
-        git push -f edgomez
+        git push -f $remote $branch
     done
     git checkout master
 }
