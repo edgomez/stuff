@@ -1,0 +1,55 @@
+// ==UserScript==
+// @name 500px view link
+// @version 20181124.01
+// @author GomGom
+// @description  This script tries to add a view link to view 500px photo in a new tab.
+// @include http*://web.500px.com/*
+// @grant GM_addStyle
+// ==/UserScript==
+
+(
+function ()
+{
+    GM_addStyle("img.photo-show__img { z-index:999 !important; }");
+
+    var addBtnDownload = function (src)
+    {
+        var intab = document.querySelector('.viewintab');
+        if (intab == null) {
+            var el = document.querySelector('.topnav__icon--upload');
+            el.insertAdjacentHTML('afterEnd', '<a href="' + src + '" target="_blank" download class="viewintab button medium submit">View</a>');
+        } else {
+            intab.setAttribute('href', src);
+        }
+    }
+
+    var eventHandler = function (events)
+    {
+        events.forEach(
+            function (event) {
+                if (event.type == "attributes" && event.attributeName == 'src') {
+                    if (event.target.src.indexOf('h%3D300/') == -1 && event.target.alt != "" && event.target.className == "photo-show__img") {
+                        addBtnDownload(event.target.src);
+                        // console.log(event.target, event.attrChange, event.attrName, event.newValue);
+                    }
+                }
+            }
+        );
+    }
+
+    var MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
+    var target = document.querySelector('body');
+    var observer = new MutationObserver(eventHandler);
+    var config = {
+        attributes : true,
+        //attributeFilter : ["src"],
+        //attributeOldValue : false,
+        //childList : true,
+        subtree : true
+    }
+
+    observer.observe(target, config);
+    //observer.disconnect();
+}
+)
+();
