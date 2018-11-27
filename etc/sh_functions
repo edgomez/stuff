@@ -219,7 +219,7 @@ dt_compile()
 
     local BUILD_TYPE="RelWithDebInfo"
     local BUILD_DIR="./build/$(uname -s).$(uname -m).$BUILD_TYPE"
-    local OPTIONS="--prefix $DT_HOME --build-type $BUILD_TYPE --build-dir $BUILD_DIR --disable-libsecret --disable-kwallet --disable-flickr --disable-unity --enable-lua"
+    local OPTIONS="--prefix $DT_HOME --build-type $BUILD_TYPE --build-dir $BUILD_DIR --disable-nls --enable-libsecret --disable-kwallet --disable-flickr --disable-unity --enable-lua --enable-camera --enable-map"
     if [ $# -gt 0 ] ; then
         OPTIONS="$OPTIONS $@"
     fi
