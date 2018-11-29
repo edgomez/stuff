@@ -257,12 +257,13 @@ dt_pull()
     fi
 
     git merge --abort
-    git checkout master
+    git checkout -B master origin/master
     git reset --hard
     git pull
     git submodule update --init
+    git checkout -B localbuild
     if [ -f tobemerged ] ; then
-        git merge --no-commit $(cat tobemerged)
+        git merge --no-ff -m "merged all local branches" $(cat tobemerged)
     fi
 }
 
@@ -274,7 +275,7 @@ dt_rebase()
         return 1
     fi
 
-    git checkout master
+    git checkout -B master origin/master
     git reset --hard
     for b in $(cat tobemerged) ; do
         local branch="${b#*/}"
