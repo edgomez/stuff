@@ -20,6 +20,7 @@ function ()
             viewlink.style.cssText = 'font-weight: bold; color: white;';
             viewlink.download = true;
             viewlink.href = src;
+            viewlink.target = '_blank';
             viewlink.id = 'viewlink_uscript';
 
             var container = document.createElement('div');
