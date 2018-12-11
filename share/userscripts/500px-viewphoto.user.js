@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name 500px view link
-// @version 20181127.01
+// @version 20181211.01
 // @author GomGom
 // @description  This script tries to add a view link to view 500px photo in a new tab.
 // @include http*://web.500px.com/*
