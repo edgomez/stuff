@@ -1,0 +1,135 @@
+#!/bin/sh
+
+sd="$(dirname "$0")"
+sd="$(cd "$sd" && pwd -P)"
+
+opt_versions=""
+opt_versions_default="4.19"
+
+parse_args()
+{
+    while [ $# -gt 0 ] ; do
+        case "$1" in
+        *) opt_versions="$opt_versions $1"; ;;
+        esac
+        shift
+    done
+    if [ -z "$opt_versions" ] ; then
+        opt_versions="$opt_versions_default"
+    fi
+}
+
+# Returns the numbr of CPUs on Linux i386/x86_64
+numcpu()
+{
+    grep ^processor /proc/cpuinfo | wc -l
+}
+
+linux_check_tree_root()
+{
+    if [ ! -f Makefile -o ! -f Kbuild -o ! -f ./scripts/setlocalversion ] ; then
+        printf "error: not in a kernel source root dir\n"
+        return 1
+    fi
+    return 0
+}
+
+# clean/pull in a Linux rootdir
+linux_pull()
+{
+    if [ ! linux_check_tree_root ] ; then
+        exit 1
+    fi
+    linux_compile clean
+    git reset --hard
+    git pull
+}
+
+# Compiles a linux kernel using make-kpkg
+# I hate make-kpkg using the three revision numbers, so x.y.(z+1) is not an
+# update of x.y.z. So i change the patch number to zero and use the Debian
+# revision x.y.z-@{--revision}.
+# It also forces:
+#   - 3/2*cpu concurrent jobs
+#   - unsigned package and so on
+#   - fakeroot rootcmd
+# @arg --revision number (unchecked) Debian revision of the packag
+linux_compile()
+{
+    if [ ! linux_check_tree_root ] ; then
+        exit 1
+    fi
+
+    # Make sure we don't generate dirty packages
+    echo -e '#!/bin/sh\nexit 0\n' > ./scripts/setlocalversion
+
+    # restore the Makefile as it's modified by this function
+    git checkout -- Makefile
+
+    local fullver=$(awk '
+/^VERSION =/      { major=$3;}
+/^PATCHLEVEL =/   { minor=$3;}
+/^SUBLEVEL =/     { patchv=$3;}
+END{printf("%s.%s.%s", major, minor, patchv);}
+' Makefile)
+
+    local _args
+    local _rev="$fullver-1"
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --revision)
+            shift
+            _rev="$fullver-$1"
+            ;;
+        *)
+            _args="$_args $1"
+            ;;
+        esac
+        shift
+    done
+
+    # remove the anoying extra version
+    awk '
+BEGIN{ver=2;}
+/^VERSION =/      { ver=$3;}
+/^SUBLEVEL =/     { if (ver >= 3) { printf("SUBLEVEL = 0\n"); next;}}
+/^EXTRAVERSION =/ { printf("EXTRAVERSION =\n"); next;}
+                  {print}
+' Makefile > Makefile.tmp
+    mv Makefile.tmp Makefile
+
+    CONCURRENCY_LEVEL=$(( $(numcpu) * 3 / 2)) \
+    KCPPFLAGS="-fno-PIE" \
+    schedtool -D -e make-kpkg \
+        --us --uc \
+        --initrd \
+        --rootcmd fakeroot \
+        --revision $_rev \
+        $_args
+}
+
+update_and_compile_kernel()
+{
+    local location="$1"
+    local oldpwd="$(pwd)"
+
+    cd "$location"
+    linux_pull
+    linux_compile kernel_image
+    cd "$oldpwd"
+}
+
+main()
+{
+    parse_args "$@"
+    local i
+
+    for i in $opt_versions; do
+        if [ ! -d "$i" ] ; then
+            continue
+        fi
+        update_and_compile_kernel "$i"
+    done
+}
+
+main "$@"
