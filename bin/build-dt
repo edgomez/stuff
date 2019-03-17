@@ -1,0 +1,134 @@
+#!/bin/sh
+
+opt_action_default="compile"
+opt_action="$opt_action_default"
+opt_additional=""
+
+g_progname="$(basename "$0")"
+
+print_help()
+{
+    cat << __EOF__
+usage: $g_progname [OPTIONS] [positional args]
+
+OPTIONS
+-a, --action  <STRING>   Action to complete
+                         compile, pull, rebase
+                         (default: $opt_action_default)
+-h, --help               Print this help message
+
+Positional args will be forwarded to the action handler as
+additional arguments
+__EOF__
+}
+
+parse_args()
+{
+    while [ $# -gt 0 ] ; do
+    case "$1" in
+    -a|--action) opt_action="$2"; shift; ;;
+    -h|--help) print_help; exit 0; ;;
+    *) opt_additional="$opt_additional $1"; ;;
+    esac
+    shift
+    done
+}
+
+dt_compile()
+{
+    if [ ! -f ./build.sh ] ; then
+        printf "error: not in DT root\n"
+        return 1
+    fi
+
+    if [ -z "$DT_HOME" ] ; then
+        printf "error: DT_HOME variable not defined\n"
+        return 1
+    fi
+
+    local BUILD_TYPE="RelWithDebInfo"
+    local BUILD_DIR="./build/$(uname -s).$(uname -m).$BUILD_TYPE"
+    local OPTIONS
+    OPTIONS="$OPTIONS --prefix $DT_HOME"
+    OPTIONS="$OPTIONS --build-type $BUILD_TYPE"
+    OPTIONS="$OPTIONS --build-dir $BUILD_DIR"
+    OPTIONS="$OPTIONS --disable-nls"
+    OPTIONS="$OPTIONS --enable-libsecret"
+    OPTIONS="$OPTIONS --disable-kwallet"
+    OPTIONS="$OPTIONS --disable-flickr"
+    OPTIONS="$OPTIONS --disable-unity"
+    OPTIONS="$OPTIONS --enable-lua"
+    OPTIONS="$OPTIONS --enable-camera"
+    OPTIONS="$OPTIONS --enable-map"
+    if [ $# -gt 0 ] ; then
+        OPTIONS="$OPTIONS $@"
+    fi
+
+    rm -rf "$DT_HOME.old"
+    mv -f "$DT_HOME" "$DT_HOME.old" 2>/dev/null \
+ 
+    rm -rf "$BUILD_DIR" \
+      && ./build.sh --install $OPTIONS \
+      && sed \
+        -e s,'^Exec=.*',"Exec=$DT_HOME/bin/darktable %U", \
+        -e s,'TryExec=.*',"TryExec=$DT_HOME/bin/darktable", \
+        -e s,'Icon=.*',"Icon=$DT_HOME/share/icons/hicolor/scalable/apps/darktable.svg", \
+        "$DT_HOME/share/applications/darktable.desktop" \
+        > "$HOME/.local/share/applications/darktable.desktop" \
+      || mv -f "$DT_HOME.old" "$DT_HOME" 2>/dev/null
+
+
+    return 0
+}
+
+# clean/pull, merges branches listed in ./tobemerged
+dt_pull()
+{
+    if [ ! -f ./build.sh ] ; then
+        printf "error: not in DT root\n"
+        return 1
+    fi
+
+    git merge --abort
+    git checkout -B master origin/master
+    git reset --hard
+    git pull
+    git submodule update --init
+    git checkout -B localbuild
+    if [ -f tobemerged ] ; then
+        git merge --no-ff -m "merged all local branches" $(cat tobemerged)
+    fi
+}
+
+# rebase all branches listed in ./tobemerged on top of master
+dt_rebase()
+{
+    if [ ! -f ./build.sh ] ; then
+        echo "error: not in DT root"
+        return 1
+    fi
+
+    git checkout -B master origin/master
+    git reset --hard
+    for b in $(cat tobemerged) ; do
+        local branch="${b#*/}"
+        local remote="${b%/${branch}}"
+        git checkout -B $branch $b
+        git rebase origin/master
+        git push -f $remote $branch
+    done
+    git checkout master
+}
+
+main()
+{
+    parse_args "$@"
+    case "$opt_action" in
+    compile) dt_compile $opt_additional ;;
+    pull) dt_pull;;
+    rebase) dt_rebase;;
+    *) printf 'error: unknown action %s\n' "$opt_action"
+    esac
+}
+
+main "$@"

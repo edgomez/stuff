@@ -1,6 +1,6 @@
 #!/bin/sh
-# collection of functions that i sue daily on my desktop
-# i usally echo ". opt/perso/bin/sh_functions" >> ~/.bashrc
+# collection of functions that i use daily on my desktop
+# I usally echo ". \"$HOME/opt/perso/bin/sh_functions\"" >> ~/.profile
 # on my machines
 
 # Prints ${$1}
@@ -121,96 +121,13 @@ env_personal()
     export PKG_CONFIG_PATH
     export CPATH
     export PYTHONPATH
+    export DT_HOME
 }
 
 # Returns the numbr of CPUs on Linux i386/x86_64
 numcpu()
 {
     grep ^processor /proc/cpuinfo | wc -l
-}
-
-# compiles a darktable source tree and its curve tooling
-# @args appended to my default options list
-dt_compile()
-{
-    if [ ! -f ./build.sh ] ; then
-        printf "error: not in DT root\n"
-        return 1
-    fi
-
-    if [ -z "$DT_HOME" ] ; then
-        printf "error: DT_HOME variable not defined\n"
-        return 1
-    fi
-
-    local BUILD_TYPE="RelWithDebInfo"
-    local BUILD_DIR="./build/$(uname -s).$(uname -m).$BUILD_TYPE"
-    local OPTIONS="--prefix $DT_HOME --build-type $BUILD_TYPE --build-dir $BUILD_DIR --disable-nls --enable-libsecret --disable-kwallet --disable-flickr --disable-unity --enable-lua --enable-camera --enable-map"
-    if [ $# -gt 0 ] ; then
-        OPTIONS="$OPTIONS $@"
-    fi
-
-    rm -rf "$DT_HOME.old"
-    mv -f "$DT_HOME" "$DT_HOME.old" 2>/dev/null \
- 
-    rm -rf "$BUILD_DIR" \
-      && ./build.sh --install $OPTIONS \
-      && sed \
-        -e s,'^Exec=.*',"Exec=$DT_HOME/bin/darktable %U", \
-        -e s,'TryExec=.*',"TryExec=$DT_HOME/bin/darktable", \
-        -e s,'Icon=.*',"Icon=$DT_HOME/share/icons/hicolor/scalable/apps/darktable.svg", \
-        "$DT_HOME/share/applications/darktable.desktop" \
-        > "$HOME/.local/share/applications/darktable.desktop" \
-      || mv -f "$DT_HOME.old" "$DT_HOME" 2>/dev/null
-
-    cd tools/basecurve \
-      && rm -rf build \
-      && mkdir build \
-      && cd build \
-      && cmake -DCMAKE_INSTALL_PREFIX=$DT_HOME -DCMAKE_BUILD_TYPE=$BUILD_TYPE .. \
-      && cmake --build . --target install -- -j4 \
-      && cd ../../.. 
-
-    return 0
-}
-
-# clean/pull, merges branches listed in ./tobemerged
-dt_pull()
-{
-    if [ ! -f ./build.sh ] ; then
-        printf "error: not in DT root\n"
-        return 1
-    fi
-
-    git merge --abort
-    git checkout -B master origin/master
-    git reset --hard
-    git pull
-    git submodule update --init
-    git checkout -B localbuild
-    if [ -f tobemerged ] ; then
-        git merge --no-ff -m "merged all local branches" $(cat tobemerged)
-    fi
-}
-
-# rebase all branches listed in ./tobemerged on top of master
-dt_rebase()
-{
-    if [ ! -f ./build.sh ] ; then
-        echo "error: not in DT root"
-        return 1
-    fi
-
-    git checkout -B master origin/master
-    git reset --hard
-    for b in $(cat tobemerged) ; do
-        local branch="${b#*/}"
-        local remote="${b%/${branch}}"
-        git checkout -B $branch $b
-        git rebase origin/master
-        git push -f $remote $branch
-    done
-    git checkout master
 }
 
 # enable/disable nouveau in a nasty way
