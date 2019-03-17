@@ -1,0 +1,12 @@
+[user]
+	name = Edouard Gomez
+	email = ed.gomez@free.fr
+
+[sendemail]
+        smtpserver = smtp.free.fr
+        smtpuser = ed.gomez
+        smtpserverport = 587
+[color]
+	ui = auto
+[push]
+	default = simple
