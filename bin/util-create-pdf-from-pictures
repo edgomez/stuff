@@ -1,0 +1,45 @@
+#!/usr/bin/env python
+# -*- encoding: utf-8 -*-
+
+import os
+import sys
+import argparse
+
+try:
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm, mm, inch, pica
+except:
+    sys.stderr.write('error: could not import reportlab module, please install them: sudo apt install python-reportlab\n')
+
+def directory_to_pdf(dirn, dstfn):
+    width, height = A4
+    c = canvas.Canvas(dstfn, pagesize=A4)
+    try:
+        for fn in os.listdir(dirn):
+            if not os.path.isfile(fn):
+                continue
+            lname = fn.lower()
+            if lname.endswith(".jpg") or lname.endswith(".gif") or lname.endswith(".png"):
+                sys.stdout.write('info: adding %s\n' % fn)
+                filepath = os.path.join(dirn, fn)
+                c.drawImage(filepath, 0, 0, width, height)
+                c.showPage()
+        c.save()
+    except Exception as e:
+        sys.stderr.write("error: received exception while creating the PDF:\n\n%s\n" % str(e))
+
+def get_option_parser():
+    parser = argparse.ArgumentParser(description='Integrate all images from a directory into a PDF')
+    parser.add_argument('directory', metavar='DIRECTORY', default=os.getcwd(),
+                        nargs='?', help='Directory to look for images from')
+    parser.add_argument('-t', '--to', dest='destination', metavar='FILENAME',
+                        default='output.pdf', help='PDF output filename')
+    return parser
+
+def main(args):
+    parser = get_option_parser()
+    options = parser.parse_args(args)
+    directory_to_pdf(options.directory, options.destination)
+
+main(sys.argv[1:])
