@@ -61,7 +61,7 @@ linux_compile()
     fi
 
     # Make sure we don't generate dirty packages
-    echo -e '#!/bin/sh\nexit 0\n' > ./scripts/setlocalversion
+    printf '#!/bin/sh\nexit 0\n' > ./scripts/setlocalversion
 
     # restore the Makefile as it's modified by this function
     git checkout -- Makefile
