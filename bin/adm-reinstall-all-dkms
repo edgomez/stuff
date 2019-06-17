@@ -1,0 +1,17 @@
+#!/bin/sh
+
+main()
+{
+    cd "/usr/src"
+
+    for i in $(find . -maxdepth 1 \( -type d -or -type l \) -and -not -name 'linux*' -and -not -name .) ; do
+        modname="${i%-*}"
+        modname="${modname##./}"
+        version="${i##*-}"
+        dkmsmod="$(printf "%s/%s\n" "$modname" "$version")"
+        sudo dkms remove "$dkmsmod" --all
+        sudo dkms install $dkmsmod
+    done
+}
+
+main "$@"
