@@ -61,6 +61,7 @@ env_personal()
     add_head "PATH" "${PANO_HOME}/bin" ":"
     add_head "PATH" "${VIDEO_HOME}/bin" ":"
     add_tail "PATH" "${DT_HOME}/bin" ":"
+    add_tail "PATH" "${HOME}/.local/bin/" ":"
 
     #------------------------------------------------------------
     # MANPATH
