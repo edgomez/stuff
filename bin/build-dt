@@ -52,6 +52,7 @@ dt_compile()
     OPTIONS="$OPTIONS --prefix $DT_HOME"
     OPTIONS="$OPTIONS --build-type $BUILD_TYPE"
     OPTIONS="$OPTIONS --build-dir $BUILD_DIR"
+    OPTIONS="$OPTIONS --build-generator Ninja"
     OPTIONS="$OPTIONS --disable-nls"
     OPTIONS="$OPTIONS --enable-libsecret"
     OPTIONS="$OPTIONS --disable-kwallet"
