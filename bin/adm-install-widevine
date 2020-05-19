@@ -15,7 +15,7 @@ onerror()
 
 main()
 {
-    trap "onerror" ERR
+    trap "onerror" EXIT
     tmpdir=$(mktemp -d widevineinstall.XXXXXX)
     cd "$tmpdir"
     wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
@@ -23,8 +23,6 @@ main()
     sudo cp -r opt/google/chrome/WidevineCdm /usr/lib/chromium/
     cd /usr/lib/chromium/
     sudo ln -sf WidevineCdm/_platform_specific/linux_x64/libwidevinecdm.so .
-    cd "$olddir"
-    rm -rf "$tmpdir"
 }
 
 main "$@"
