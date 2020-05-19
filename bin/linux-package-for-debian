@@ -4,7 +4,7 @@ sd="$(dirname "$0")"
 sd="$(cd "$sd" && pwd -P)"
 
 opt_versions=""
-opt_versions_default="4.19"
+opt_versions_default="5.6"
 
 parse_args()
 {
@@ -45,67 +45,20 @@ linux_pull()
     git pull
 }
 
-# Compiles a linux kernel using make-kpkg
-# I hate make-kpkg using the three revision numbers, so x.y.(z+1) is not an
-# update of x.y.z. So i change the patch number to zero and use the Debian
-# revision x.y.z-@{--revision}.
-# It also forces:
+# Compiles a linux kernel for debian
 #   - 3/2*cpu concurrent jobs
-#   - unsigned package and so on
-#   - fakeroot rootcmd
-# @arg --revision number (unchecked) Debian revision of the packag
+#   - uses schedtool to batch the process
 linux_compile()
 {
+    local target="${1:-bindeb-pkg}"
     if [ ! linux_check_tree_root ] ; then
         exit 1
     fi
 
-    # Make sure we don't generate dirty packages
-    printf '#!/bin/sh\nexit 0\n' > ./scripts/setlocalversion
-
-    # restore the Makefile as it's modified by this function
-    git checkout -- Makefile
-
-    local fullver=$(awk '
-/^VERSION =/      { major=$3;}
-/^PATCHLEVEL =/   { minor=$3;}
-/^SUBLEVEL =/     { patchv=$3;}
-END{printf("%s.%s.%s", major, minor, patchv);}
-' Makefile)
-
-    local _args
-    local _rev="$fullver-1"
-    while [ $# -gt 0 ]; do
-        case "$1" in
-        --revision)
-            shift
-            _rev="$fullver-$1"
-            ;;
-        *)
-            _args="$_args $1"
-            ;;
-        esac
-        shift
-    done
-
-    # remove the anoying extra version
-    awk '
-BEGIN{ver=2;}
-/^VERSION =/      { ver=$3;}
-/^SUBLEVEL =/     { if (ver >= 3) { printf("SUBLEVEL = 0\n"); next;}}
-/^EXTRAVERSION =/ { printf("EXTRAVERSION =\n"); next;}
-                  {print}
-' Makefile > Makefile.tmp
-    mv Makefile.tmp Makefile
-
-    CONCURRENCY_LEVEL=$(( $(numcpu) * 3 / 2)) \
-    KCPPFLAGS="-fno-PIE" \
-    schedtool -D -e make-kpkg \
-        --us --uc \
-        --initrd \
-        --rootcmd fakeroot \
-        --revision $_rev \
-        $_args
+    schedtool -D -e \
+        make \
+        -j "$(($(numcpu) * 3 / 2))" \
+        "$target"
 }
 
 update_and_compile_kernel()
@@ -115,7 +68,7 @@ update_and_compile_kernel()
 
     cd "$location"
     linux_pull
-    linux_compile kernel_image
+    linux_compile bindeb-pkg
     cd "$oldpwd"
 }
 
