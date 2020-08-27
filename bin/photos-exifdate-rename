@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 
 import os
 import sys
@@ -6,6 +6,7 @@ import pyexiv2
 import logging
 import logging.handlers
 import optparse
+import functools
 
 parser = optparse.OptionParser(usage="usage: %prog [options] arg1 ... argn", version="%prog 0.9")
 parser.add_option("-v", "--verbose", dest="verbose", action="store_true",
@@ -46,7 +47,7 @@ def rename_photo(file):
 
     # prepare all elements for renaming iterations
     folder = os.path.dirname(file)
-    date = unicode(exifdate.value.strftime("%Y-%m-%d_%H%M%S"))
+    date = exifdate.value.strftime("%Y-%m-%d_%H%M%S")
     i = 1
     ext = file.split('.')[-1].lower()
     newname = get_candidate(date, i, ext)
@@ -101,14 +102,14 @@ def cmp_filename(a, b):
 
 def visit_directory(folder, maxdepth=5, depth=1):
     try:
-        for entry in sorted(os.listdir(folder), cmp=cmp_filename):
+        for entry in sorted(os.listdir(folder), key=functools.cmp_to_key(cmp_filename)):
             absentry = os.path.join(folder, entry)
             if os.path.isdir(absentry) and os.access(absentry, os.X_OK) and depth < maxdepth:
                 visit_directory(absentry, maxdepth, depth + 1)
             elif os.path.splitext(absentry)[1][1:].lower() in supported_formats:
                 rename_photo(absentry)
-    except:
-        msg.error("something prevented renaming elements in %s" % folder)
+    except e:
+        msg.error("something prevented renaming elements in %s\n%s" % (folder, str(e)))
 
 if not args:
     parser.print_help()
