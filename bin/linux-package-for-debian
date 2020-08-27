@@ -40,8 +40,9 @@ linux_pull()
     if [ ! linux_check_tree_root ] ; then
         exit 1
     fi
-    linux_compile clean
-    git reset --hard
+    if [ ! -z "$(git status --untracked-files=no --porcelain)" ]; then
+        git reset --hard
+    fi
     git pull
 }
 
