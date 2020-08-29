@@ -1,15 +1,15 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 
 import sys
 import os
 import subprocess
-from optparse import OptionParser
-from urllib import quote
+from argparse import ArgumentParser
+from urllib.parse import quote
 
-parser = OptionParser()
-parser.add_option("-v", "--verbose", dest="verbose", action="store_true",
+parser = ArgumentParser()
+parser.add_argument("-v", "--verbose", dest="verbose", action="store_true",
                   default=False, help="verbose output")
-(options, args) = parser.parse_args()
+options = parser.parse_args()
 
 
 p =  subprocess.Popen(['dpkg',  '-l'], stdout=subprocess.PIPE)
@@ -17,12 +17,13 @@ p =  subprocess.Popen(['dpkg',  '-l'], stdout=subprocess.PIPE)
 # Get the list of installed packages
 installed = []
 for line in p.stdout:
-	if line.startswith('ii'):
-		splitted = line.split()
-		name = splitted[1].split(':')[0]
-		version = splitted[2]
-		arch = splitted[3]
-		installed.append('%s_%s_%s.deb' % (quote(name,'+~').lower(), quote(version,'+~').lower(), arch))
+        line = line.decode()
+        if line.startswith('ii'):
+                splitted = line.split()
+                name = splitted[1].split(':')[0]
+                version = splitted[2]
+                arch = splitted[3]
+                installed.append('%s_%s_%s.deb' % (quote(name,'+~').lower(), quote(version,'+~').lower(), arch))
 p.wait()
 
 # Get the list of files in the cache
@@ -33,13 +34,13 @@ def int2human(val):
     d = 1
     p = 0
     while val/d > 1024:
-	d = d*1024
+        d = d*1024
         p = p + 1
-    r = val*10/d
+    r = val*10 // d
     if r % 10:
-	r = float(r)/10.0
+        r = float(r) / 10.0
     else:
-        r = r/10
+        r = r // 10
     return r, units[p]
     
 # Find out what file in the cache is not installed anymore
@@ -48,13 +49,13 @@ total = 0
 for file in cache:
 	if file not in installed:
                 path = os.path.join('/var/cache/apt/archives', file) 
-		sys.stdout.write(path)
-		if options.verbose:
-			s = os.stat(path)
+                sys.stdout.write(path)
+                if options.verbose:
+                        s = os.stat(path)
                         size, unit =  int2human(s.st_size)
-			sys.stdout.write(' [' + str(size) + unit + ']')
-			total = total + s.st_size
-		sys.stdout.write('\n')
+                        sys.stdout.write(' [' + str(size) + unit + ']')
+                        total = total + s.st_size
+                sys.stdout.write('\n')
 if options.verbose:
     size, unit =  int2human(total)
     sys.stdout.write('Total: ' + str(size) + unit + '\n')
