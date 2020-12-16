@@ -1,5 +1,5 @@
 " Author: Edouard Gomez
-" Last Edited: 2004-05-16
+" Last Edited: 2019-04-14
 
 " No Vi compatible mode
 :set nocp
@@ -43,7 +43,7 @@
 " Use css for html output
 :let html_use_css=1
 
-" Don't put swp files everywhere but there
+" Keep the swp files in a single specific directory
 :set directory=~/.vim/swp/
 
 " This function is used for C/Java/C++ editing.
@@ -110,7 +110,7 @@
 :noremap <silent> <F6> :BufExplorer<CR>
 
 " Taglist related init
-:let Tlist_Ctags_Cmd="ctags-exuberant"
+:let Tlist_Ctags_Cmd="ctags"
 :nnoremap <silent> <F7> :Tlist<CR>
 :nnoremap <silent> <F8> :TlistUpdate<CR>
 :nnoremap <silent> <F9> :TlistClose<CR>
