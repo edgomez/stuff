@@ -1,0 +1,6 @@
+#!/bin/sh
+
+sudo mount.cifs \
+    -o vers=1.0,guest,uid=$(id -un),iocharset=utf8 \
+    "//mafreebox.freebox.fr/Disque Dur" \
+    /mnt/

@@ -1,39 +1,45 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 import os
 import sys
 import pyexiv2
 import logging
 import logging.handlers
-import optparse
+import argparse
 import functools
 
-parser = optparse.OptionParser(usage="usage: %prog [options] arg1 ... argn", version="%prog 0.9")
-parser.add_option("-v", "--verbose", dest="verbose", action="store_true",
-                  help="enables verbose messages")
-parser.add_option("-d", "--depth", dest="depth",
-                  action="store", type="int", default=1, metavar="INT",
-                  help="sets the maximum directory recursion level")
-(options, args) = parser.parse_args()
-
-msg = logging.getLogger('Logger')
-msgch = logging.StreamHandler()
-level = logging.INFO
-if options.verbose:
-    level = logging.DEBUG
-msg.setLevel(level)
-msgch.setLevel(level)
-msgch.setFormatter(logging.Formatter("%(message)s"))
-msg.addHandler(msgch)
-
 supported_formats = ['jpg', 'jpeg', 'nef', 'cr2' ]
+
+def get_args_parser(args):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", dest="verbose", action="store_true",
+                  help="enables verbose messages")
+    parser.add_argument("-d", "--depth", dest="depth",
+                  action="store", type=int, default=1, metavar="INT",
+                  help="sets the maximum directory recursion level")
+    parser.add_argument(dest="args", metavar="DIR|FILENAME", nargs='+')
+    return parser
+
+
+def get_logger(options):
+    msg = logging.getLogger('Logger')
+    msgch = logging.StreamHandler()
+    level = logging.INFO
+    if options.verbose:
+        level = logging.DEBUG
+    msg.setLevel(level)
+    msgch.setLevel(level)
+    msgch.setFormatter(logging.Formatter("%(message)s"))
+    msg.addHandler(msgch)
+
+    return msg
 
 def get_candidate(date, i, ext):
     return u"%s_%02d.%s" % (date, i, ext)
 
-def rename_photo(file):
+def rename_photo(logger, fn):
     # read the exif info from the file
-    info = pyexiv2.ImageMetadata(file)
+    info = pyexiv2.ImageMetadata(fn)
     info.read()
 
     # retrieve an exif date
@@ -42,20 +48,20 @@ def rename_photo(file):
     elif "Exif.Image.DateTime" in info.exif_keys:
         exifdate = info["Exif.Image.DateTime"]
     else:
-        msg.debug("no exif for file '%s'" % file)
+        logger.debug("no exif for file '%s'" % fn)
         return
 
     # prepare all elements for renaming iterations
-    folder = os.path.dirname(file)
+    folder = os.path.dirname(fn)
     date = exifdate.value.strftime("%Y-%m-%d_%H%M%S")
     i = 1
-    ext = file.split('.')[-1].lower()
+    ext = fn.split('.')[-1].lower()
     newname = get_candidate(date, i, ext)
 
     # avoid renaming if the file we're dealing with already matches the
     # desired new name
-    if date == os.path.basename(file)[:len(date)]:
-        msg.debug("untouched '%s'" % file)
+    if date == os.path.basename(fn)[:len(date)]:
+        logger.debug("untouched '%s'" % fn)
         return
 
     # Create a complete path
@@ -67,15 +73,15 @@ def rename_photo(file):
         newfile = os.path.join(folder, newname)
 
     # Companion file for DT
-    companion = ''.join([file, '.xmp'])
+    companion = ''.join([fn, '.xmp'])
     if os.path.isfile(companion):
         newcompanion = ''.join([newfile, '.xmp'])
         os.rename(companion, newcompanion) 
-        msg.info("renamed companion '%s' to '%s'" % (companion, newcompanion))
+        logger.info("renamed companion '%s' to '%s'" % (companion, newcompanion))
 
     # A free filename has been found
-    os.rename(file, newfile)
-    msg.info("renamed '%s' to '%s'" % (file, newfile))
+    os.rename(fn, newfile)
+    logger.info("renamed '%s' to '%s'" % (fn, newfile))
 
 def cmp_filename(a, b):
     # first we look if a or b are a substring of the other, this prevents
@@ -100,20 +106,27 @@ def cmp_filename(a, b):
     else:
         return 0
 
-def visit_directory(folder, maxdepth=5, depth=1):
+def visit_directory(folder, logger, maxdepth=5, depth=1):
     try:
         for entry in sorted(os.listdir(folder), key=functools.cmp_to_key(cmp_filename)):
             absentry = os.path.join(folder, entry)
             if os.path.isdir(absentry) and os.access(absentry, os.X_OK) and depth < maxdepth:
-                visit_directory(absentry, maxdepth, depth + 1)
+                visit_directory(absentry, logger, maxdepth, depth + 1)
             elif os.path.splitext(absentry)[1][1:].lower() in supported_formats:
-                rename_photo(absentry)
-    except e:
-        msg.error("something prevented renaming elements in %s\n%s" % (folder, str(e)))
+                rename_photo(logger, absentry)
+    except:
+        logger.error("something prevented renaming elements in %s\n\nError:\n%s\n%s\n%s\n" %
+           (folder,
+            str(sys.exc_info()[0]), str(sys.exc_info()[1]), str(sys.exc_info()[2])))
 
-if not args:
-    parser.print_help()
-else:
-    for arg in [r for r in args if os.path.isdir(r)]:
-        visit_directory(arg, options.depth, 1)
-    
+def main(args):
+    parser = get_args_parser(args)
+    options = parser.parse_args(args)
+    logger = get_logger(options)
+    for arg in [r for r in options.args if os.path.isdir(r)]:
+        visit_directory(arg, logger, options.depth, 1)
+    for arg in [r for r in options.args if os.path.isfile(r)]:
+        rename_photo(arg, logger)
+
+if __name__ == '__main__':
+    main(sys.argv[1:])
