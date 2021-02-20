@@ -3,6 +3,8 @@
 opt_mount=1
 
 g_progname="$(basename "$0")"
+g_mntdir="$HOME/mnt/freebox"
+g_mntopts="vers=1.0,rw,iocharset=utf8,guest,forceuid,forcegid"
 
 print_help()
 {
@@ -30,16 +32,16 @@ parse_args()
 
 mount_freebox()
 {
-    mkdir -p "$HOME/mnt/freebox"
+    mkdir -p  "$g_mntdir"
     sudo mount.cifs \
-        -o vers=1.0,guest,uid=$(id -un),iocharset=utf8 \
+        -o "${g_mntopts},uid=$(id -un),gid=$(id -gn)" \
         "//mafreebox.freebox.fr/Disque Dur" \
-        "$HOME/mnt/freebox/"
+        "$g_mntdir"
 }
 
 umount_freebox()
 {
-    sudo umount -f "$HOME/mnt/freebox/"
+    sudo umount -f "$g_mntdir"
 }
 
 main()
