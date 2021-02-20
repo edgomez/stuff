@@ -58,7 +58,7 @@ linux_compile()
 
     schedtool -D -e \
         make \
-        -j "$(($(numcpu) * 3 / 2))" \
+        -j "$(($(numcpu) + 2))" \
         "$target"
 }
 

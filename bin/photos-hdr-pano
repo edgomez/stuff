@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 # -*- Encoding: utf-8 -*-
 
 import argparse
@@ -27,7 +27,7 @@ def option_parser():
     parser.add_argument('-s', '--stack', dest='stack',
                       type=int, help='Bracketed stack depth', default=3)
     parser.add_argument('-a', '--align', dest='align',
-                      action='store_true', help='Align the HDR stacks', default=True)
+                      action='store_true', help='Align the HDR stacks', default=False)
     parser.add_argument('-v', '--verbose', dest='verbose',
                       action='store_true', help='Be verbose', default=False)
     parser.add_argument('-j', '--parallel', dest='j',
@@ -35,7 +35,7 @@ def option_parser():
     parser.add_argument('-m', '--hdrmerge', dest='merge',
                       action='store_true', help='Merge the HDR stacks with hugin_hdrmerge', default=False)
     parser.add_argument('-e', '--enfuse', dest='enfuse',
-                      action='store_true', help='Merge the HDR stacks with enfuse', default=False)
+                      action='store_true', help='Merge the HDR stacks with enfuse', default=True)
     parser.add_argument('files', nargs='+', help='picture')
     return parser
 
@@ -113,8 +113,8 @@ class stack(object):
             logerr('here is the output\n%s' % '\n'.join(stdout, stderr))
             sys.exit(1)
 
-        self.aligned = ['%s%04d.tif' % (align_pfx, i)  for i in xrange(self.stack_size)]
-        for i in xrange(self.stack_size):
+        self.aligned = ['%s%04d.tif' % (align_pfx, i)  for i in range(self.stack_size)]
+        for i in range(self.stack_size):
             copy_exif(self.aligned[i], self.shots[i])
 
     def prealigned(self):
@@ -185,17 +185,17 @@ def main():
         logerr("error: file list length is not a multiple of the stack depth")
         sys.exit(1)
 
-    numstack = len(files)/options.stack
+    numstack = len(files) // options.stack
     stacks = []
     processes = None
     if options.j > 0:
         processes = options.j
-    if processes > numstack:
-        processes = numstack
+        if processes > numstack:
+            processes = numstack
 
     pool = multiprocessing.Pool(processes)
     try:
-        for n in xrange(numstack):
+        for n in range(numstack):
             s = stack(n+1, options.stack, numstack, files[options.stack*n:options.stack*(n+1)])
             r = pool.apply_async(process_stack, (options, s))
             stacks.append(r)
