@@ -46,7 +46,7 @@ dt_compile()
         return 1
     fi
 
-    local BUILD_TYPE="RelWithDebInfo"
+    local BUILD_TYPE="Release"
     local BUILD_DIR="./build/$(uname -s).$(uname -m).$BUILD_TYPE"
     local OPTIONS
     OPTIONS="$OPTIONS --prefix $DT_HOME"
