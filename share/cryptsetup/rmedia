@@ -1,0 +1,215 @@
+#!/bin/sh
+
+# ---------------------------------------------------------------------------
+# Removable media cryptsetup disk unlock
+#
+# Copyright (C) 2021 Edouard Gomez
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Documentation
+#
+# When trying to unlock a cryptsetup disk, looks for a keyfile /.${UUID}.key
+# (or /.boot.key if no uuid can be determined for the crypttab source entry)
+# on a removable media or fallbacks to askpass
+#
+# compatible w/ plymouth graphical boot (use F1 for diagnostic messages if
+# needed)
+#
+# WARNING: storing your key files on a regular removable media is not a good
+#          security practice. Just trying to be practical here...
+#          The removable media containing the keys should be physically
+#          away from the disks it unlocks except during the unlock action.
+#          Keep it on you, store it in a safe etc... just don't let it plugged
+#          on the PC... if both get stolen at the same time, then encryption
+#          serves no purpose... 
+# 
+# How to install (valid for Debian systems, adapt for other flavors):
+#
+# 1. Copy this rmedia script to /lib/cryptsetup/scripts
+#    chmod 755 if needed
+# 2. Make sure your initramfs will have everything required to mount the
+#    filesystem where the keys will be located
+#    That means FS, but also everything required to access that hardware
+#    Edit /etc/initramfs-tools/modules as needed
+#
+#    For my specific case it meant accessing a SUB key on a USB3 host
+#    controller
+#    # accessing USB stick on a USB3 port
+#    usbcore
+#    usb_storage
+#    scsi_mod
+#    sd_mod
+#    uas
+#    sg
+#    xhci_hcd
+#    xhci_pci_renesas
+#    xhci_pci
+#    
+#    # using a VFAT formatted partition on the USB stick
+#    # beware uuid are longnames, fat won't suffice
+#    # nls modules need be adapted to your kernel defaults. being large here
+#    # should be ok for western countries
+#    fat
+#    vfat
+#    nls_ascii
+#    nls_iso8859_1
+#    nls_cp437
+#    nls_cp850
+#
+#    If you get this wrong, the initramfs will be unable to access the
+#    removable media content and will result in the script falling back to
+#    askpass eventuallly. You'll still be abe to boot your system.
+# 3. Change the LABEL down below to customize the removable media to look for
+#    if not set, fallbacks directly to askpass
+# 4. Edit the options /etc/crypttab entry you'd like to unlock with this script
+#    adding
+#    keyscript=/lib/cryptsetup/scripts/rmedia
+# 5. Update the initramfs
+#    update-initramfs -u
+# 6. Add a key to your root LUKS volume
+#    cryptsetup luksAddKey /dev/whatever_crypt_volume_is /path/to/the/key
+# 7. Add the key to your chosen removable media
+#    mount "/dev/disk/by-label/$LABEL" /mnt
+#    cp /path/to/key "/mnt/.$(blkid -s UUID /dev/whatever_crypt_volume_is -o value).key"
+#    umount /mnt
+#
+# ---------------------------------------------------------------------------
+
+# Removable media label to look for
+LABEL="BOOTKEYS"
+
+# Number of times the key may be presented to cryptsetup. After that, it is
+# assumed the key contained within the removable media is invalid and askpass
+# will be used directly
+# Note that debian does like 5 tries total, then loops again a few times
+# eventually falling back to emergency initramfs shell
+# Use "cryptsetup open /dev/whatever_crypt_volume_is crypt_name" manually
+MAXCRYPTTAB_TRIES=1
+
+# Number of times the removable media might be probed before asking the
+# password
+MAXMEDIAWAIT=5
+
+# Not sure where blkid is in initramfs
+BLKID="blkid"
+if [ -x /sbin/blkid ] ; then
+    BLKID="/sbin/blkid"
+fi
+
+ask_for_password()
+{
+    cryptkey="$CRYPTTAB_NAME passphrase"
+    if [ -x /bin/plymouth ] && plymouth --ping; then
+        cryptkeyscript="plymouth ask-for-password --prompt"
+        cryptkey=$(printf "$cryptkey")
+    else
+        cryptkeyscript="/lib/cryptsetup/askpass"
+    fi
+    $cryptkeyscript "$cryptkey"
+}
+
+report()
+{
+    echo "rmedia unlock: $@" >&2
+}
+
+get_source_uuid()
+{
+    local source_uuid=""
+    case "$CRYPTTAB_SOURCE" in
+    /dev/*)
+        # retrieve uuid using device file
+        source_uuid="$($BLKID -s UUID -o value $CRYPTTAB_SOURCE)"
+        ;;
+    UUID=*|PARTUUID=*)
+        # retrieve uuid using tag pair
+        source_uuid="$($BLKID -t "$CRYPTTAB_SOURCE" -s UUID -o value)"
+        ;;
+    *)
+        report "can't determine UUID for $CRYPTTAB_SOURCE crypttab entry"
+        ;;
+    esac
+
+    printf "$source_uuid"
+}
+
+check_removable_media()
+{
+    local mediawait=0
+    local medialabel="$1"
+    local source_uuid="$2"
+
+    local filepath
+    if [ -n "$source_uuid" ] ; then
+        filepath="/.${source_uuid}.key"
+    else
+        filepath="/.boot.key"
+    fi
+
+    # Check for the key on the removable media
+    while [ $mediawait -lt $MAXMEDIAWAIT ] ; do
+        report "wait#$mediawait"
+
+        local device=$($BLKID -L "$medialabel")
+   
+        if [ -b "$device" ]; then
+            local mountpoint="/tmp/rmedia_unlock"
+            mkdir -p "$mountpoint"
+            mount "$device" "$mountpoint"
+
+            local keyfile="$mountpoint$filepath"
+            if [ -e "$keyfile" ]; then
+                report "found keyfile at ${device}${filepath}"
+
+                # give the keyfile a try
+                cat "$keyfile"
+                umount -f "$mountpoint"
+                rmdir "$mountpoint"
+                exit
+            else
+                report "found removable media (${device}) but no keyfile (${filepath})"
+                umount -f "$mountpoint"
+                rmdir "$mountpoint"
+
+                # just break, askpass will be called by caller
+		break
+            fi
+        fi
+
+        report "waiting 1s for removable media to show up"
+        sleep 1
+        mediawait=$(( $mediawait + 1 ))
+    done
+}
+
+# For debug purpose only, when executing the script manually for testing
+# A real run provides these variables, and the following statement will
+# be a noop
+CRYPTTAB_TRIED="${CRYPTTAB_TRIED:-0}"
+
+main()
+{
+    if [ $CRYPTTAB_TRIED -lt $MAXCRYPTTAB_TRIES -a -n "$LABEL" ]  ; then
+        local source_uuid="$(get_source_uuid)"
+        report "checking for media label='$LABEL' to unlock uuid='${source_uuid:-<unknown>}'"
+        check_removable_media "$LABEL" "$source_uuid"
+    fi
+
+    report "failed presenting a valid keyfile ($CRYPTTAB_TRIED/$MAXCRYPTTAB_TRIES). asking passphrase"
+    ask_for_password
+}
+
+main "$@"

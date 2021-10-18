@@ -1,6 +1,57 @@
 #!/bin/sh
 
-sudo mount.cifs \
-    -o vers=1.0,guest,uid=$(id -un),iocharset=utf8 \
-    "//mafreebox.freebox.fr/Disque Dur" \
-    /mnt/
+opt_mount=1
+
+g_progname="$(basename "$0")"
+g_mntdir="$HOME/mnt/freebox"
+g_mntopts="vers=1.0,rw,iocharset=utf8,guest,forceuid,forcegid"
+
+print_help()
+{
+    cat << __EOF__
+usage: $g_progname [OPTIONS]
+
+OPTIONS
+
+-u, --umount     Umount the freebox
+
+-h, --help       Print this help message
+__EOF__
+}
+
+parse_args()
+{
+    while [ $# -ne 0 ] ; do
+    case "$1" in
+    -u|--umount) opt_mount=0; ;;
+    -h|--help) print_help; exit 0; ;;
+    esac
+    shift
+    done
+}
+
+mount_freebox()
+{
+    mkdir -p  "$g_mntdir"
+    sudo mount.cifs \
+        -o "${g_mntopts},uid=$(id -un),gid=$(id -gn)" \
+        "//mafreebox.freebox.fr/Disque Dur" \
+        "$g_mntdir"
+}
+
+umount_freebox()
+{
+    sudo umount -f "$g_mntdir"
+}
+
+main()
+{
+    parse_args "$@"
+    if [ $opt_mount -ne 0 ] ; then
+        mount_freebox
+    else
+        umount_freebox
+    fi
+}
+
+main "$@"
