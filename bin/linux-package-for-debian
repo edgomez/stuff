@@ -2,20 +2,45 @@
 
 sd="$(dirname "$0")"
 sd="$(cd "$sd" && pwd -P)"
+g_progname="$(basename "$0")"
 
 opt_versions=""
-opt_versions_default="5.6"
+opt_versions_default="5.14"
+opt_target=""
+opt_target_default="bindeb-pkg"
+opt_update=1
+
+print_help()
+{
+    cat << __EOF__
+usage: $g_progname [OPTIONS] [KERNEL SRC DIR] ...
+
+OPTIONS:
+-u|--update      Pull/update the kernel before build
+-nu|--no-update  Do not pull/update the kernel before build
+-t, --target     Kernel target to build
+
+-h, --help       Print this help message
+__EOF__
+}
 
 parse_args()
 {
     while [ $# -gt 0 ] ; do
         case "$1" in
+        -u|--update) opt_update=1; ;;
+        -nu|--no-update) opt_update=0; ;;
+        -t|--target) opt_target="$2"; shift; ;;
+        -h|--help) print_help; exit 0; ;;
         *) opt_versions="$opt_versions $1"; ;;
         esac
         shift
     done
     if [ -z "$opt_versions" ] ; then
         opt_versions="$opt_versions_default"
+    fi
+    if [ -z "$opt_target" ] ; then
+        opt_target="$opt_target_default"
     fi
 }
 
@@ -47,19 +72,29 @@ linux_pull()
 }
 
 # Compiles a linux kernel for debian
-#   - 3/2*cpu concurrent jobs
-#   - uses schedtool to batch the process
-linux_compile()
+#   - cpu+2 concurrent jobs
+#   - uses schedtool to batch the process if possible
+linux_make()
 {
     local target="${1:-bindeb-pkg}"
     if [ ! linux_check_tree_root ] ; then
         exit 1
     fi
 
-    schedtool -D -e \
+    local schedtoolpath="$(command -v schedtool)"
+    local SCHEDTOOL=""
+    if [ -n "$schedtoolpath" -a -x "$schedtoolpath" ] ; then
+        SCHEDTOOL="schedtool -D -e"
+    fi
+    $SCHEDTOOL \
         make \
         -j "$(($(numcpu) + 2))" \
         "$target"
+}
+
+debian_files_cleanup()
+{
+    rm -f  ../linux-*.buildinfo ../linux-*.changes
 }
 
 update_and_compile_kernel()
@@ -68,8 +103,11 @@ update_and_compile_kernel()
     local oldpwd="$(pwd)"
 
     cd "$location"
-    linux_pull
-    linux_compile bindeb-pkg
+    if [ $opt_update -ne 0 ] ; then
+        linux_pull
+    fi
+    linux_make $opt_target
+    debian_files_cleanup
     cd "$oldpwd"
 }
 
