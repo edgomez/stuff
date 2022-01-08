@@ -8,7 +8,7 @@ import logging.handlers
 import argparse
 import functools
 
-supported_formats = ['arw', 'rw2', 'dng', 'jpg', 'jpeg', 'nef', 'cr2' ]
+supported_formats = ['raf', 'arw', 'rw2', 'dng', 'jpg', 'jpeg', 'nef', 'cr2', 'cr3' ]
 
 def get_args_parser(args):
     parser = argparse.ArgumentParser()

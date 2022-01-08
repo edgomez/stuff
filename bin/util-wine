@@ -1,0 +1,69 @@
+#!/bin/sh
+
+g_progname="$(basename "$0")"
+g_progdir="$(dirname "$0")"
+g_progdir="$(cd "$g_progdir" && pwd -P)"
+
+opt_winedir_default="/opt/wine-staging"
+opt_winedir="$opt_winedir_default"
+opt_prefix_default="$HOME/media/games/heroic/wineprefix"
+opt_prefix="$opt_prefix_default"
+
+wine_setup_env()
+{
+    local winedir="$1"
+    local prefix="$2"
+
+    if [ ! -d "$prefix" ] ; then
+        printf "error: \"%s\" is not a directory" "$prefix"
+        exit 1
+    fi
+    if [ ! -d "$winedir" -o ! -d "$winedir/bin" -o ! -x "$winedir/bin/wine" ] ; then
+        printf "error: typical wine directory structure not found in \"%s\"\n" "$winedir"
+        exit 1
+    fi
+
+    WINE_HOME="$winedir"
+    WINELOADER="$WINE_HOME/bin/wine"
+    WINEPREFIX="$(cd "$prefix" && pwd -P)"
+    WINEDEBUG=fixme-all
+
+    export WINEPREFIX WINELOADER WINEDEBUG
+    PATH="$PATH:$WINE_HOME/bin"
+}
+
+print_help()
+{
+    cat << __EOF__
+usage: $g_progname [OPTIONS]
+
+OPTIONS
+-p, --wine-prefix  Wine prefix
+                   (default: $opt_prefix_default)
+-w, --wine-dir     Wine directory
+                   (default: $opt_winedir)
+
+-h, --help     Help message
+__EOF__
+}
+
+parse_args()
+{
+    while [ $# -gt 0 ] ; do
+    case "$1" in
+    -p|--wine-prefix) opt_prefix="$2"; shift; ;;
+    -w|--wine-dir) opt_winedir="$2"; shift; ;;
+    -h|--help) print_help; exit 0; ;;
+    esac
+    shift
+    done
+}
+    
+main()
+{
+    parse_args "$@"
+    wine_setup_env "$opt_winedir" "$opt_prefix"
+    $SHELL
+}
+
+main "$@"

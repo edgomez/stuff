@@ -60,10 +60,10 @@ def copy_exif(dst, src):
         logerr('here is the output\n%s' % '\n'.join(stdout, stderr))
         sys.exit(1)
 
-    exifdata = '\n'.join([l for l in stdout.split('\n') if l.find("SourceFile") == -1])
+    exifdata = '\n'.join([l for l in stdout.decode('utf-8').split('\n') if l.find("SourceFile") == -1])
     exiffn = "%s.exif" % dst
     with open(exiffn, 'w+b') as f:
-        f.write(exifdata)
+        f.write(exifdata.encode('utf-8'))
         f.flush()
         cmd = [ 'exiftool', '-overwrite_original', '-all=', dst]
         logdebug("%s\n" % (' '.join(cmd)))
@@ -187,27 +187,34 @@ def main():
 
     numstack = len(files) // options.stack
     stacks = []
-    processes = None
-    if options.j > 0:
-        processes = options.j
-        if processes > numstack:
-            processes = numstack
+    processes = options.j
+    if processes <= 0:
+        processes = 1
+    if processes > numstack:
+        processes = numstack
 
-    pool = multiprocessing.Pool(processes)
-    try:
-        for n in range(numstack):
-            s = stack(n+1, options.stack, numstack, files[options.stack*n:options.stack*(n+1)])
-            r = pool.apply_async(process_stack, (options, s))
-            stacks.append(r)
-
-        pool.close()
-        pool.join()
-
-    except KeyboardInterrupt:
-        loginfo("quitting by crtl-c ...")
-        if pool is not None:
-            pool.terminate()
+    if processes > 1:
+        pool = multiprocessing.Pool(processes)
+        try:
+            for n in range(numstack):
+                s = stack(n+1, options.stack, numstack, files[options.stack*n:options.stack*(n+1)])
+                r = pool.apply_async(process_stack, (options, s))
+                stacks.append(r)
+    
+            pool.close()
             pool.join()
+        except KeyboardInterrupt:
+            loginfo("quitting by crtl-c ...")
+            if pool is not None:
+                pool.terminate()
+                pool.join()
+    else:
+        try:
+            for n in range(numstack):
+                s = stack(n+1, options.stack, numstack, files[options.stack*n:options.stack*(n+1)])
+                process_stack(options, s)
+        except KeyboardInterrupt:
+            loginfo("quitting by crtl-c ...")
 
 if __name__ == "__main__":
     main()

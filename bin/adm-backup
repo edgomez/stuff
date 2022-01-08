@@ -2,7 +2,7 @@
 
 _donothing=1
 _destination=""
-_bck_photos=1
+_bck_photos=0
 _bck_ed=1
 _bck_packages=1
 

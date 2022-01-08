@@ -52,6 +52,7 @@ env_personal()
     PERSO_HOME="${HOME}/opt/perso"
     DT_HOME="${HOME}/opt/darktable"
     PHOTO_HOME="${HOME}/opt/photolibs"
+    CMAKE_HOME="${HOME}/opt/cmake"
 
     #------------------------------------------------------------
     #    PATH
@@ -60,6 +61,7 @@ env_personal()
     add_tail "PATH" "${PERSO_HOME}/bin" ":"
     add_head "PATH" "${PANO_HOME}/bin" ":"
     add_head "PATH" "${VIDEO_HOME}/bin" ":"
+    add_head "PATH" "${CMAKE_HOME}/bin" ":"
     add_tail "PATH" "${DT_HOME}/bin" ":"
     add_tail "PATH" "${HOME}/.local/bin/" ":"
 
