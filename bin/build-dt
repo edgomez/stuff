@@ -34,6 +34,11 @@ parse_args()
     done
 }
 
+list_branches_in_tobemerged()
+{
+    cat .tobemerged | egrep -v '^#'
+}
+
 dt_compile()
 {
     if [ ! -f ./build.sh ] ; then
@@ -82,7 +87,7 @@ dt_compile()
     return 0
 }
 
-# clean/pull, merges branches listed in ./tobemerged
+# clean/pull, merges branches listed in ./.tobemerged
 dt_pull()
 {
     if [ ! -f ./build.sh ] ; then
@@ -96,12 +101,12 @@ dt_pull()
     git pull
     git submodule update --init
     git checkout -B localbuild
-    if [ -f tobemerged ] ; then
-        git merge --no-ff -m "merged all local branches" $(cat tobemerged)
+    if [ -f .tobemerged ] ; then
+        git merge --no-ff -m "merged all local branches" $(list_branches_in_tobemerged)
     fi
 }
 
-# rebase all branches listed in ./tobemerged on top of master
+# rebase all branches listed in ./.tobemerged on top of master
 dt_rebase()
 {
     if [ ! -f ./build.sh ] ; then
@@ -111,7 +116,7 @@ dt_rebase()
 
     git checkout -B master origin/master
     git reset --hard
-    for b in $(cat tobemerged) ; do
+    for b in $(list_branches_in_tobemerged) ; do
         local branch="${b#*/}"
         local remote="${b%/${branch}}"
         git checkout -B $branch $b
