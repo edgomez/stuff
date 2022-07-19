@@ -2,16 +2,19 @@
 
 import os
 import sys
-import pyexiv2
+import exiv2
 import logging
 import logging.handlers
 import argparse
 import functools
+from datetime import datetime
 
 supported_formats = ['raf', 'arw', 'rw2', 'dng', 'jpg', 'jpeg', 'nef', 'cr2', 'cr3' ]
 
 def get_args_parser(args):
     parser = argparse.ArgumentParser()
+    parser.add_argument("-n", "--dry-run", dest="dryrun", action="store_true",
+                  help="do no actual renaming", default=False)
     parser.add_argument("-v", "--verbose", dest="verbose", action="store_true",
                   help="enables verbose messages")
     parser.add_argument("-d", "--depth", dest="depth",
@@ -37,23 +40,26 @@ def get_logger(options):
 def get_candidate(date, i, ext):
     return u"%s_%02d.%s" % (date, i, ext)
 
-def rename_photo(logger, fn):
+def rename_photo(logger, fn, dryrun = False):
     # read the exif info from the file
-    info = pyexiv2.ImageMetadata(fn)
-    info.read()
+    logger.debug("handling possible rename of %s" % fn)
+    img = exiv2.ImageFactory.open(fn)
+    img.readMetadata()
+    info = img.exifData()
 
     # retrieve an exif date
-    if "Exif.Photo.DateTimeOriginal" in info.exif_keys:
-        exifdate = info["Exif.Photo.DateTimeOriginal"]
-    elif "Exif.Image.DateTime" in info.exif_keys:
-        exifdate = info["Exif.Image.DateTime"]
+    if "Exif.Photo.DateTimeOriginal" in info:
+        exifdate = info["Exif.Photo.DateTimeOriginal"]._print()
+    elif "Exif.Image.DateTime" in info:
+        exifdate = info["Exif.Image.DateTime"]._print()
     else:
         logger.debug("no exif for file '%s'" % fn)
+        logger.debug("%s" % info)
         return
 
     # prepare all elements for renaming iterations
     folder = os.path.dirname(fn)
-    date = exifdate.value.strftime("%Y-%m-%d_%H%M%S")
+    date = datetime.strptime(exifdate, "%Y:%m:%d %H:%M:%S").strftime("%Y-%m-%d_%H%M%S")
     i = 1
     ext = fn.split('.')[-1].lower()
     newname = get_candidate(date, i, ext)
@@ -76,11 +82,13 @@ def rename_photo(logger, fn):
     companion = ''.join([fn, '.xmp'])
     if os.path.isfile(companion):
         newcompanion = ''.join([newfile, '.xmp'])
-        os.rename(companion, newcompanion) 
+        if not dryrun:
+            os.rename(companion, newcompanion) 
         logger.info("renamed companion '%s' to '%s'" % (companion, newcompanion))
 
     # A free filename has been found
-    os.rename(fn, newfile)
+    if not dryrun:
+        os.rename(fn, newfile)
     logger.info("renamed '%s' to '%s'" % (fn, newfile))
 
 def cmp_filename(a, b):
@@ -106,27 +114,30 @@ def cmp_filename(a, b):
     else:
         return 0
 
-def visit_directory(folder, logger, maxdepth=5, depth=1):
+def visit_directory(folder, logger, maxdepth=5, depth=1, dryrun=False):
     try:
         for entry in sorted(os.listdir(folder), key=functools.cmp_to_key(cmp_filename)):
             absentry = os.path.join(folder, entry)
             if os.path.isdir(absentry) and os.access(absentry, os.X_OK) and depth < maxdepth:
                 visit_directory(absentry, logger, maxdepth, depth + 1)
             elif os.path.splitext(absentry)[1][1:].lower() in supported_formats:
-                rename_photo(logger, absentry)
+                rename_photo(logger, absentry, dryrun)
     except:
+        import traceback
         logger.error("something prevented renaming elements in %s\n\nError:\n%s\n%s\n%s\n" %
            (folder,
-            str(sys.exc_info()[0]), str(sys.exc_info()[1]), str(sys.exc_info()[2])))
+            str(sys.exc_info()[0]), str(sys.exc_info()[1]), "\n".join(traceback.format_tb(sys.exc_info()[2]))))
 
 def main(args):
     parser = get_args_parser(args)
     options = parser.parse_args(args)
     logger = get_logger(options)
+    exiv2.enableBMFF()
+    exiv2.LogMsg.setLevel(logging.DEBUG)
     for arg in [r for r in options.args if os.path.isdir(r)]:
-        visit_directory(arg, logger, options.depth, 1)
+        visit_directory(arg, logger, options.depth, 1, options.dryrun)
     for arg in [r for r in options.args if os.path.isfile(r)]:
-        rename_photo(arg, logger)
+        rename_photo(arg, logger, options.dryrun)
 
 if __name__ == '__main__':
     main(sys.argv[1:])
