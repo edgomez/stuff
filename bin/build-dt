@@ -79,8 +79,8 @@ dt_compile()
         -e s,'^Exec=.*',"Exec=$DT_HOME/bin/darktable %U", \
         -e s,'TryExec=.*',"TryExec=$DT_HOME/bin/darktable", \
         -e s,'Icon=.*',"Icon=$DT_HOME/share/icons/hicolor/scalable/apps/darktable.svg", \
-        "$DT_HOME/share/applications/darktable.desktop" \
-        > "$HOME/.local/share/applications/darktable.desktop" \
+        "$DT_HOME/share/applications/org.darktable.darktable.desktop" \
+        > "$HOME/.local/share/applications/org.darktable.darktable.desktop" \
       || mv -f "$DT_HOME.old" "$DT_HOME" 2>/dev/null
 
 
