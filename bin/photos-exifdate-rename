@@ -9,7 +9,7 @@ import argparse
 import functools
 from datetime import datetime
 
-supported_formats = ['raf', 'arw', 'rw2', 'dng', 'jpg', 'jpeg', 'nef', 'cr2', 'cr3' ]
+supported_formats = ['raf', 'arw', 'rw2', 'dng', 'jpg', 'jpeg', 'nef', 'cr2', 'cr3', 'iiq', 'tif', 'orf' ]
 
 def get_args_parser(args):
     parser = argparse.ArgumentParser()
