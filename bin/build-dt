@@ -3,6 +3,7 @@
 opt_action_default="compile"
 opt_action="$opt_action_default"
 opt_additional=""
+opt_pgo="none"
 
 g_progname="$(basename "$0")"
 
@@ -15,6 +16,11 @@ OPTIONS
 -a, --action  <STRING>   Action to complete
                          compile, pull, rebase
                          (default: $opt_action_default)
+    --pgo-generate       Add necessary compile flags to generate profile guided
+                         optimization instrumentation files
+    --pgo-use            Add necessary compile flags to use the profile guided
+                         optimization flags
+
 -h, --help               Print this help message
 
 Positional args will be forwarded to the action handler as
@@ -28,6 +34,8 @@ parse_args()
     case "$1" in
     -a|--action) opt_action="$2"; shift; ;;
     -h|--help) print_help; exit 0; ;;
+    --pgo-generate) opt_pgo="generate"; ;;
+    --pgo-use) opt_pgo="use"; ;;
     *) opt_additional="$opt_additional $1"; ;;
     esac
     shift
@@ -36,7 +44,7 @@ parse_args()
 
 list_branches_in_tobemerged()
 {
-    cat .tobemerged | egrep -v '^#'
+    cat .tobemerged | grep -E -v '^#'
 }
 
 dt_compile()
@@ -66,13 +74,33 @@ dt_compile()
     OPTIONS="$OPTIONS --enable-lua"
     OPTIONS="$OPTIONS --enable-camera"
     OPTIONS="$OPTIONS --enable-map"
+    OPTIONS="$OPTIONS -- -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
     if [ $# -gt 0 ] ; then
         OPTIONS="$OPTIONS $@"
     fi
 
     rm -rf "$DT_HOME.old"
     mv -f "$DT_HOME" "$DT_HOME.old" 2>/dev/null \
- 
+
+    case "$opt_pgo" in
+    generate)
+        mkdir -p "${BUILD_DIR}.pgo"
+        pgo_dir="$(cd "${BUILD_DIR}.pgo" && pwd -P)"
+        pgo_flags="-fprofile-dir=$pgo_dir -fprofile-generate=$pgo_dir"
+        ;;
+    use)
+        mkdir -p "${BUILD_DIR}.pgo"
+        pgo_dir="$(cd "${BUILD_DIR}.pgo" && pwd -P)"
+        pgo_flags="-fprofile-dir=$pgo_dir -fprofile-use=$pgo_dir -fprofile-correction -Wno-maybe-uninitialized -Wno-missing-profile -Wno-coverage-mismatch"; ;;
+    none) ;;
+    esac
+
+    if [ -n "$pgo_flags" ] ; then
+        CFLAGS="$pgo_flags"
+        CXXFLAGS="$pgo_flags"
+        export CFLAGS CXXFLAGS
+    fi
+       
     rm -rf "$BUILD_DIR" \
       && ./build.sh --install $OPTIONS \
       && sed \
