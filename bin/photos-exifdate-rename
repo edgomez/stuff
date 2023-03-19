@@ -137,7 +137,7 @@ def main(args):
     for arg in [r for r in options.args if os.path.isdir(r)]:
         visit_directory(arg, logger, options.depth, 1, options.dryrun)
     for arg in [r for r in options.args if os.path.isfile(r)]:
-        rename_photo(arg, logger, options.dryrun)
+        rename_photo(logger, arg, options.dryrun)
 
 if __name__ == '__main__':
     main(sys.argv[1:])
