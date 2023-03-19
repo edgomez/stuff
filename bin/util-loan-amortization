@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import sys
 from optparse import OptionParser
@@ -20,6 +20,8 @@ parser.add_option("", "--assuranceratemain", dest="assuranceratemain",
                   help="rate of the main loan assurance", metavar="FLOAT")
 
 (options, args) = parser.parse_args()
+
+print(options)
 
 options.ratemain = float(options.ratemain)
 options.summain = float(options.summain)
