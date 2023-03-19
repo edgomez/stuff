@@ -1,0 +1,392 @@
+#!/bin/sh
+
+# ---------------------------------------------------------------------------
+# Copyright 2023 Edouard Gomez
+#
+# Inspired by the work from Thiago Silva <thiagos.dasilva@gmail.com>
+#
+# Original GitHub repository:
+# https://github.com/thiggy01/change-gdm-background
+# ---------------------------------------------------------------------------
+
+g_prog="$(basename "$0")"
+
+# will contain the distribution id
+g_distro_id=""
+
+# will contain the distribution release codename
+g_distro_codename=""
+
+# contains the distribution GNOME shell resource file path
+g_gnome_shell_resource_fn="/usr/share/gnome-shell/gnome-shell-theme.gresource"
+
+# contains the GNOME shell resource file backup path used by the script
+g_gnome_shell_resource_backup_fn="${g_gnome_shell_resource_fn}.bck"
+
+# will contain the temporary working directory
+g_workdir=""
+
+# ---------------------------------------------------------------------------
+# Script options, filled by parse_args()
+# ---------------------------------------------------------------------------
+
+opt_restore=0
+opt_positional=""
+opt_dryrun=0
+
+# ---------------------------------------------------------------------------
+# Print program help message
+# ---------------------------------------------------------------------------
+
+print_help()
+{
+    cat << __EOF__
+$g_prog [OPTIONS] [FILENAME|\#HEXA_COLOR_CODE]
+
+This program requires root privileges to operate as expected
+
+OPTIONS
+
+-r, --restore    Restore the original GDM3 resource XML file
+                 from first run backup
+-n, --dry-run    Perform all operations that do not require root privileges
+
+-h, --help       Print this help message
+
+EXAMPLES
+
+# Setting up a background image (image/jpeg, image/png, image/svg+xml are
+# supported by GDM)
+$ sudo $g_prog /path/to/image
+
+# Setting up a solid color using a #rrggbb encoded color
+# Note the \# escaping if your shell uses # for comments
+$ sudo $g_prog \#yourhexcode
+__EOF__
+}
+
+# ---------------------------------------------------------------------------
+# Parse the command line arguments and setups opt_* variables
+# ---------------------------------------------------------------------------
+
+parse_args()
+{
+    while [ "$#" -gt 0 ] ; do
+        case "$1" in
+        -h|--help) print_help; exit 0; ;;
+        -r|--restore) opt_restore=1; ;;
+        -n|--dry-run) opt_dryrun=1; ;;
+        *) opt_positional="$1"; ;;
+        esac
+        shift
+    done
+}
+
+# ---------------------------------------------------------------------------
+# Utility functions
+# ---------------------------------------------------------------------------
+
+lsb_release_f()
+{
+    # seems like lsb_release complains about modules not being available,
+    # skip that line
+    lsb_release "$@" | grep -v available
+}
+
+install_required_packages()
+{
+    if [ $opt_dryrun -ne 0 ] ; then
+        return
+    fi
+
+    apt install -y libglib2.0-dev-bin
+}
+
+ensure_euid_0_or_die()
+{
+    if [ "$(id -u)" -ne 0 ] ; then
+        printf "info: this script must be run with root or with the sudo command.\n"
+        exit 1
+    fi
+}
+
+ensure_distribution_is_supported_or_die()
+{
+    g_distro_id="$(lsb_release_f -i | cut -d : -f 2 | sed -e 's,^\s*,,' -e 's,\s*$,,')"
+    case "$g_distro_id" in
+    Debian)
+        ;;
+    *)
+        printf "error: %s distributions are not supported\n" "$g_distro_id"
+        exit 1
+    esac
+
+    g_distro_codename="$(lsb_release_f -c |  cut -d : -f 2 | sed -e 's,^\s*,,' -e 's,\s*$,,')"
+    case "$g_distro_codename" in
+    bullseye|bookworm)
+        ;;
+    *)
+        printf "error: this script doesn't support %s release\n" "$g_distro_codename"
+        exit 1
+    esac
+
+    if [ ! -f "$g_gnome_shell_resource_fn" ] ; then
+        printf "error: the GNOME shell resource file cannot be found at %s\n" "$g_gnome_shell_resource_fn"
+    fi
+}
+
+ensure_glib_resource_compiler_is_available_or_die()
+{
+    if [ ! -x "$(command -v glib-compile-resources)" ]; then
+        printf "info: additional glib 2.0 libraries need to be installed\n"
+        local accept_installing
+        read \
+            -p "info: type y/Y to proceed or any other key to exit: " \
+            accept_installing
+        printf '\n'
+        case "$accept_installing" in
+        y|Y|yes|YES)
+            install_required_packages
+            ;;
+        *)
+            printf "info: this tool can't run without required libraries. exiting\n"
+            exit 1
+        esac
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Ask the user if a restart is desired.
+# Exits the script
+# ---------------------------------------------------------------------------
+
+ask_gdm_restart()
+{
+    local restart_gdm
+    read -p \
+        "info: do you want to restart GDM to apply change? (y/n):" \
+        restart_gdm
+    printf "\n"
+    case "$restart_gdm" in
+    y|Y|yes|YES)
+        service gdm restart
+        ;;
+    *)
+        printf "info: restart GDM service to apply the background change\n"
+        exit 0
+    esac
+}
+
+backup_gnome_shell_resource()
+{
+    if [ ! -f "$g_gnome_shell_resource_backup_fn" ] ; then
+        if [ $opt_dryrun -eq 0 ] ; then
+            cp "$g_gnome_shell_resource_fn" "$g_gnome_shell_resource_backup_fn"
+        else
+            # as the original resource file won't be chenged, fake the backup is the source
+            g_gnome_shell_resource_backup_fn="$g_gnome_shell_resource_fn"
+        fi
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Restore the backup of the gnome shell resource file and optionally restarts GDM
+# ---------------------------------------------------------------------------
+
+restore_gnome_shell_resource_backup()
+{
+    if [ ! -f "$g_gnome_shell_resource_backup_fn" ] ; then
+        printf "error: no backup file '%s' to restore\n" "$g_gnome_shell_resource_backup_fn"
+        exit 1
+    fi
+
+    if [ $opt_dryrun -ne 0 ] ; then
+        return
+    fi
+
+    mv "$g_gnome_shell_resource_backup_fn" "$g_gnome_shell_resource_fn"
+
+    if [ $? -eq 0 ]; then
+        chmod 644 "$g_gnome_shell_resource_fn"
+        printf "info: restored backup GNOME shell theme resource\n"
+        ask_gdm_restart
+        exit 0
+    else
+        printf "error: failed restoring GNOME shell theme resource\n"
+    fi
+}
+
+extract_gnome_shell_resource_backup_to_workdir()
+{
+    local resource
+    for resource in $(gresource list "$g_gnome_shell_resource_backup_fn"); do
+        local resource_local_fn="${resource#\/org\/gnome\/shell\/}"
+        local resource_local_dir="${resource_local_fn%/*}"
+        if [ ! -d "$g_workdir/$resource_local_dir" ]; then
+            mkdir -p "$g_workdir/$resource_local_dir"
+        fi
+        gresource extract "$g_gnome_shell_resource_backup_fn" "$resource" \
+            > "$g_workdir/$resource_local_fn"
+    done
+}
+
+compile_gnome_shell_resource_xml()
+{
+    glib-compile-resources \
+        "--sourcedir=$g_workdir/theme/" \
+        "$g_workdir/theme/gnome-shell-theme.xml"
+    if [ ! -f "$g_workdir/theme/gnome-shell-theme.gresource" ] ; then
+        printf "error: failed compiling the modified resource file\n"
+        exit 1
+    fi
+}
+
+install_generated_gnome_shell_resource()
+{
+    mv \
+        "$g_workdir/theme/gnome-shell-theme.gresource" \
+        "$g_gnome_shell_resource_fn"
+
+    if [ "$?" -eq 0 ]; then
+        chmod 644 "$g_gnome_shell_resource_fn"
+        printf "info: installed the new GNOME shell resource file '%s'\n" \
+            "$g_gnome_shell_resource_fn"
+        ask_gdm_restart
+    else
+        printf "error: failed to install the new GNOME shell resource file\n"
+        restore_gnome_shell_resource_backup
+        printf "info: no changes were applied\n"
+    fi
+}
+
+install_gnome_shell_resource_from_color()
+{
+    # Store selected background color.
+    local bg_color="$1"
+
+    backup_gnome_shell_resource
+    extract_gnome_shell_resource_backup_to_workdir
+
+    # replace the complete lockDialog CSS rule with the desired color code
+    local old_bg="#lockDialogGroup \{.*?\}"
+    local new_bg="#lockDialogGroup { background: $bg_color; background-size: cover;}"
+    perl -i -0777 -pe "s/$old_bg/$new_bg/s" "$g_workdir/theme/gnome-shell.css"
+
+    # Generate the new resource XML from the list of elements from the original resource XML
+    cat << __EOF__ > "$g_workdir/theme/gnome-shell-theme.xml"
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+    <gresource prefix="/org/gnome/shell/theme">
+    $(for file in $(gresource list "$g_gnome_shell_resource_backup_fn"); do
+          printf "        <file>${file#\/org\/gnome/shell\/theme\/}</file>\n"
+      done)
+    </gresource>
+</gresources>
+__EOF__
+
+    compile_gnome_shell_resource_xml
+    if [ $opt_dryrun -eq 0 ] ; then
+        install_generated_gnome_shell_resource
+    fi
+}
+
+install_gnome_shell_resource_from_image()
+{
+    # Define image variables.
+    local bg_fn=$(readlink -f "$1")
+    local bg_ext="${bg_fn#*.}"
+
+    backup_gnome_shell_resource
+    extract_gnome_shell_resource_backup_to_workdir
+
+    local bg_inworkdir="$(mktemp -p "$g_workdir/theme" "XXXXXX.${bg_ext}")"
+    local bg_basename="$(basename "$bg_inworkdir")"
+
+    cp "$bg_fn" "$g_workdir/theme/$bg_basename"
+
+    local old_bg="#lockDialogGroup \{.*?\}"
+    local new_bg="#lockDialogGroup { background: url('resource:\/\/\/org\/gnome\/shell\/theme\/$bg_basename'); background-size: cover; }"
+    perl -i -0777 -pe "s/$old_bg/$new_bg/s" "$g_workdir/theme/gnome-shell.css"
+
+    # Generate gresource xml file.
+        cat << __EOF__ > "$g_workdir/theme/gnome-shell-theme.xml"
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+    <gresource prefix="/org/gnome/shell/theme">
+    $(for file in $(gresource list "$g_gnome_shell_resource_backup_fn"); do
+          printf "        <file>${file#\/org\/gnome/shell\/theme\/}</file>\n"
+      done)
+        <file>$bg_basename</file>
+    </gresource>
+</gresources>
+__EOF__
+
+    compile_gnome_shell_resource_xml
+
+    if [ $opt_dryrun -eq 0 ] ; then
+        install_generated_gnome_shell_resource
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Cleanup the temporary directory used to create the new resource file
+# Used in a script trap to ensure we don't leave anything behind
+# (as far as gdm restarting isn't involved that is)
+# ---------------------------------------------------------------------------
+
+cleanup_tmpdir()
+{
+    if [ -n "$g_workdir" -a -d "$g_workdir" ] ; then
+        if [ $opt_dryrun -eq 0 ] ; then
+            rm -rf "$g_workdir"
+            g_workdir=""
+        fi
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Main entry point
+#
+# "$@" script command line
+# ---------------------------------------------------------------------------
+
+main()
+{
+    parse_args "$@"
+
+    if [ $opt_dryrun -eq 0 ] ; then
+        ensure_euid_0_or_die
+    fi
+    ensure_distribution_is_supported_or_die
+    ensure_glib_resource_compiler_is_available_or_die
+
+    if [ $opt_restore -ne 0 ] ; then
+        restore_gnome_shell_resource_backup
+        exit 0
+    fi
+
+    g_workdir="$(mktemp -d --tmpdir change-gdm-background.XXXXXX)"
+    trap "cleanup_tmpdir" EXIT
+
+    if [ -f "$opt_positional" ] ; then
+        local file_mimetype="$(file --mime-type -b "$opt_positional")"
+        case "$file_mimetype" in
+            image/jpeg|image/png|image/svg+xml)
+                ;;
+            *)
+                printf "error: unsupported '%s' mimetype for GNOME shell background\n" "$file_mimetype"
+                exit 1
+                ;;
+        esac
+
+        install_gnome_shell_resource_from_image "$opt_positional"
+    elif printf "$opt_positional" | grep -q -E '^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$' ; then
+        install_gnome_shell_resource_from_color "$opt_positional"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Execute the main entry point passing all command line options
+# ---------------------------------------------------------------------------
+
+main "$@"
