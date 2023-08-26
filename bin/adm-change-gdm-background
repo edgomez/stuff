@@ -123,7 +123,7 @@ ensure_distribution_is_supported_or_die()
 
     g_distro_codename="$(lsb_release_f -c |  cut -d : -f 2 | sed -e 's,^\s*,,' -e 's,\s*$,,')"
     case "$g_distro_codename" in
-    bullseye|bookworm)
+    bullseye|bookworm|trixie)
         ;;
     *)
         printf "error: this script doesn't support %s release\n" "$g_distro_codename"
@@ -308,6 +308,11 @@ install_gnome_shell_resource_from_image()
     local new_bg="#lockDialogGroup { background: url('resource:\/\/\/org\/gnome\/shell\/theme\/$bg_basename'); background-size: cover; }"
     perl -i -0777 -pe "s/$old_bg/$new_bg/s" "$g_workdir/theme/gnome-shell.css"
 
+
+    old_bg="\.login-dialog \{.*?\}"
+    new_bg=".login-dialog { background: url('resource:\/\/\/org\/gnome\/shell\/theme\/$bg_basename'); background-size: cover; }"
+    perl -i -0777 -pe "s/$old_bg/$new_bg/s" "$g_workdir/theme/gnome-shell.css"
+
     # Generate gresource xml file.
         cat << __EOF__ > "$g_workdir/theme/gnome-shell-theme.xml"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -371,7 +376,7 @@ main()
     if [ -f "$opt_positional" ] ; then
         local file_mimetype="$(file --mime-type -b "$opt_positional")"
         case "$file_mimetype" in
-            image/jpeg|image/png|image/svg+xml)
+            image/jpeg|image/png|image/svg+xml|image/webp)
                 ;;
             *)
                 printf "error: unsupported '%s' mimetype for GNOME shell background\n" "$file_mimetype"
