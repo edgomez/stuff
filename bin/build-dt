@@ -66,15 +66,17 @@ dt_compile()
     OPTIONS="$OPTIONS --build-type $BUILD_TYPE"
     OPTIONS="$OPTIONS --build-dir $BUILD_DIR"
     OPTIONS="$OPTIONS --build-generator Ninja"
-    OPTIONS="$OPTIONS --disable-nls"
+    OPTIONS="$OPTIONS --enable-nls"
     OPTIONS="$OPTIONS --enable-libsecret"
     OPTIONS="$OPTIONS --disable-kwallet"
-    OPTIONS="$OPTIONS --disable-flickr"
     OPTIONS="$OPTIONS --disable-unity"
     OPTIONS="$OPTIONS --enable-lua"
     OPTIONS="$OPTIONS --enable-camera"
     OPTIONS="$OPTIONS --enable-map"
-    OPTIONS="$OPTIONS -- -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+    CCACHE="$(command -v ccache)"
+    if [ -n "$CCACHE" -a -x "$CCACHE" ] ; then
+        OPTIONS="$OPTIONS -- -DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE"
+    fi
     if [ $# -gt 0 ] ; then
         OPTIONS="$OPTIONS $@"
     fi
@@ -127,7 +129,7 @@ dt_pull()
     git checkout -B master origin/master
     git reset --hard
     git pull
-    git submodule update --init
+    git submodule update --init $(git submodule status | grep -v tests/integration | awk '{printf(" %s", $2); }')
     git checkout -B localbuild
     if [ -f .tobemerged ] ; then
         git merge --no-ff -m "merged all local branches" $(list_branches_in_tobemerged)
